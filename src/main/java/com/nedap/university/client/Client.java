@@ -1,7 +1,5 @@
 package com.nedap.university.client;
 
-import java.net.DatagramSocket;
-import java.net.SocketException;
 
 /**
  * Represents the client for the file transfer.
@@ -18,22 +16,69 @@ public class Client {
         this.clientTUI = clientTUI;
     }
 
-    public void doUpload(){
+    /**
+     * Upload a file from the client to the server on the PI.
+     *
+     * @param fileName is the file to be uploaded.
+     */
+    public void doUpload(String fileName) {
+        //todo
     }
 
-    public void doDownload() {
+    /**
+     * Download a file from the server on the PI to the client.
+     *
+     * @param fileName is the file to be downloaded.
+     */
+    public void doDownload(String fileName) {
+        //todo
     }
 
-    public void doRemove() {
+    /**
+     * Remove a file from the server on the PI.
+     *
+     * @param fileName is the file to be removed.
+     */
+    public void doRemove(String fileName) {
+        //todo
     }
 
-    public void doReplace() {
+    /**
+     * Replace a file on the server on the PI by a new file.
+     *
+     * @param oldFileName is the file to be replaced.
+     * @param newFileName is the new file.
+     */
+    public void doReplace(String oldFileName, String newFileName) {
+        //todo
     }
 
+    /**
+     * Show a list of the files that are stored on the server on the PI.
+     */
     public void doList() {
+        //todo
     }
 
-    public void doOptions(){
+    /**
+     * Show the options of the commands that can be used in the TUI.
+     */
+    public void showOptions() {
+        System.out.println("\"   Commands:\n" +
+                "          upload <file> ...................... upload <file> to server\n" +
+                "          download <file> .................... download <file> from server\n" +
+                "          remove <file> ...................... remove <file> from server\n" +
+                "          replace <old file> <new file>  ..... replace <old file> by <new file> on server\n" +
+                "          list ............................... list all files stored on server\n" +
+                "          options ............................ show options (this menu)\n" +
+                "          close .............................. close application\""
+        );
     }
 
+    /**
+     * Close the TUI.
+     */
+    public void doClose() {
+        //todo
+    }
 }
