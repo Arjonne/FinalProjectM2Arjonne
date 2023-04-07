@@ -1,5 +1,7 @@
 package com.nedap.university;
 
+import com.nedap.university.server.Server;
+
 public class Main {
 
     private static boolean keepAlive = true;
@@ -15,6 +17,11 @@ public class Main {
 
         while (keepAlive) {
             try {
+
+                // server class aanroepen en connectie maken
+                Server server = new Server();
+                server.start();
+
                 // do useful stuff
                 Thread.sleep(1000);
             } catch (InterruptedException e) {
