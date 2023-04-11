@@ -9,8 +9,7 @@ import java.net.DatagramSocket;
  */
 public final class PacketProtocol {
     public static final String PI_ADDRESS = "172.16.1.1";
-    public static final int CLIENT_PORT = 8080;
-    public static final int PI_PORT = 8080;
+    public static final int PI_PORT = 9090;
     // variables for own header:
     public static final int HEADER_SIZE = 12;
     // flags:
@@ -22,6 +21,7 @@ public final class PacketProtocol {
     public static final int REPLACE = 4;
     public static final int LIST = 2;
     public static final int CLOSE = 1;
+
     /**
      * Creates the protocol.
      */
@@ -36,7 +36,7 @@ public final class PacketProtocol {
      * @param flag           is the flag that is being set
      * @return the header as byte array (which is the same format as the datagram packet itself).
      */
-    public byte[] createHeader(int sequenceNumber, int flag) {
+    public static byte[] createHeader(int sequenceNumber, int flag) {
         int acknowledgementNumber = sequenceNumber + 1;
         byte[] header = new byte[HEADER_SIZE];
         header[0] = (byte) (sequenceNumber >> 24);
@@ -63,7 +63,7 @@ public final class PacketProtocol {
      * @param fileData       is the data of the actual file to be transmitted.
      * @return the byte array of the total packet (combination of header and data).
      */
-    public byte[] addHeaderToData(int sequenceNumber, int flag, byte[] fileData) {
+    public static byte[] addHeaderToData(int sequenceNumber, int flag, byte[] fileData) {
         int totalPacketSize = HEADER_SIZE + fileData.length;
         byte[] header = createHeader(sequenceNumber, flag);
         byte[] totalPacket = new byte[totalPacketSize];
@@ -76,37 +76,5 @@ public final class PacketProtocol {
             totalPacket[i] = fileData[i - HEADER_SIZE];
         }
         return totalPacket;
-    }
-
-    /**
-     * Try to send packet to the connected client / server (depending on which of the two is sending).
-     *
-     * @param socket from which the packet is being sent.
-     * @param packet is the packet that needs to be transmitted.
-     */
-    public void sendDatagramPacket(DatagramSocket socket, DatagramPacket packet) {
-        try {
-            socket.send(packet);
-        } catch (IOException e) {
-            System.out.println("Could not send packet, try again.");
-            // throw new RuntimeException(e);
-            // todo error handling
-        }
-    }
-
-    /**
-     * Try to receive packet from connected client / server (depending on which of the two is sending).
-     *
-     * @param socket from which the packet is being sent.
-     * @param packet is the packet that needs to be transmitted.
-     */
-    public void receiveDatagramPacket(DatagramSocket socket, DatagramPacket packet) {
-        try {
-            socket.receive(packet);
-        } catch (IOException e) {
-            System.out.println("Could not receive packet, try again.");
-            // throw new RuntimeException(e);
-            // todo error handling
-        }
     }
 }
