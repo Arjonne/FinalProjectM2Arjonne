@@ -13,19 +13,15 @@ import java.util.List;
 
 public class Server {
     private int port;
-    private int address;
     private List<String> listOfFiles;
     private boolean isOpen;
     private DatagramSocket serverSocket;
-    private DatagramSocket clientSocket;
     /**
      * Create the server with the port and address of the PI. Besides, a list is created
      */
     public Server() {
         // the port on which the server is listening on:
         port = Protocol.PI_PORT;
-        // the address via which this server can be reached:
-        address = Protocol.PI_ADDRESS;
         // a new list is created that stores all files that are available on the server:
         listOfFiles = new ArrayList<>();
         // after creating the server, it is not opened yet:
@@ -44,11 +40,9 @@ public class Server {
         } else {
             try {
                 serverSocket = new DatagramSocket(port);
-                serverSocket.connect(Protocol.CLIENT_ADDRESS, Protocol.CLIENT_PORT);
-                // todo: check if correct:
-                clientSocket = new DatagramSocket(); // todo moeten hier beide sockets gecreeerd worden??
-                ClientHandler clientHandler = new ClientHandler(clientSocket, this);
+                ClientHandler clientHandler = new ClientHandler(serverSocket, this);
                 clientHandler.start();
+                System.out.println("clientHandler started");
             } catch (SocketException e) {
                 System.out.println("Not able to start the server with this port.");
             }
@@ -66,7 +60,6 @@ public class Server {
             return;
         }
         serverSocket.close();
-        clientSocket.close();
         isOpen = false;
         System.out.println("Server is closed");
     }

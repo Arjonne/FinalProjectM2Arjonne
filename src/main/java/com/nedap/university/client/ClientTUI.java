@@ -1,11 +1,17 @@
 package com.nedap.university.client;
 
+import java.io.IOException;
+import java.net.DatagramPacket;
+import java.net.DatagramSocket;
+import java.net.InetAddress;
 import java.util.Scanner;
 
 /**
  * Represents the textual user interface of the client for interaction with the server.
  */
 public class ClientTUI {
+    private DatagramSocket clientSocket;
+
     private Client client;
     private final String UPLOAD = "UPLOAD";
     private final String DOWNLOAD = "DOWNLOAD";
@@ -31,51 +37,62 @@ public class ClientTUI {
      * Start the textual user interface. Ask for input and respond correctly to that input.
      */
     public void start() {
-        boolean connected = true;
-        while (connected) {
-            Scanner scanner = new Scanner(System.in);
-            System.out.println("Type what you want to do:");
-            String input = scanner.nextLine().toUpperCase();
-            String[] split = input.split("\\s+");
-            String command = split[0];
-            String fileName = null;
-            String oldFileName = null;
-            String newFileName = null;
-            if (split.length == 2) {
-                fileName = split[1];
-            } else if (split.length > 2) {
-                oldFileName = split[1];
-                newFileName = split[2];
-            }
-            switch (command) {
-                case UPLOAD:
-                    client.doUpload(fileName);
-                    break;
-                case DOWNLOAD:
-                    client.doDownload(fileName);
-                    break;
-                case REMOVE:
-                    client.doRemove(fileName);
-                    break;
-                case REPLACE:
-                    client.doReplace(oldFileName, newFileName);
-                    break;
-                case LIST:
-                    client.doList();
-                    break;
-                case OPTIONS:
-                    client.showOptions();
-                    break;
-                case CLOSE:
-                    client.doClose();
-                    System.out.println("Application is closing");
-                    connected = false;
-                    break;
-                default:
-                    System.out.println("The input is not correct. Use the following format:");
-                    client.showOptions();
-                    break;
-            }
-        }
+        System.out.println("test");
+        client = new Client(this);
+        client.startClient();
+        Scanner scanner = new Scanner(System.in);
+        System.out.println("Type your message: ");
+        String messageToSend = scanner.nextLine();
+        client.setBuffer(messageToSend);
+        client.setInputIsGiven();
     }
 }
+
+
+//        while (true) {
+//            Scanner scanner = new Scanner(System.in);
+//            System.out.println("Type what you want to do:");
+//            String input = scanner.nextLine().toUpperCase();
+//            String[] split = input.split("\\s+");
+//            String command = split[0];
+//            String fileName = null;
+//            String oldFileName = null;
+//            String newFileName = null;
+//            if (split.length == 2) {
+//                fileName = split[1];
+//            } else if (split.length > 2) {
+//                oldFileName = split[1];
+//                newFileName = split[2];
+//            }
+//            switch (command) {
+//                case UPLOAD:
+//                    client.doUpload(fileName);
+//                    break;
+//                case DOWNLOAD:
+//                    client.doDownload(fileName);
+//                    break;
+//                case REMOVE:
+//                    client.doRemove(fileName);
+//                    break;
+//                case REPLACE:
+//                    client.doReplace(oldFileName, newFileName);
+//                    break;
+//                case LIST:
+//                    client.doList();
+//                    break;
+//                case OPTIONS:
+//                    client.showOptions();
+//                    break;
+//                case CLOSE:
+//                    client.doClose();
+//                    System.out.println("Application is closing");
+//                    connected = false;
+//                    break;
+//                default:
+//                    System.out.println("The input is not correct. Use the following format:");
+//                    client.showOptions();
+//                    break;
+//            }
+//        }
+
+
