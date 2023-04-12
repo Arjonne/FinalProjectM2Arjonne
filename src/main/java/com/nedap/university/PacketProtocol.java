@@ -1,6 +1,7 @@
 package com.nedap.university;
 
 import java.net.InetAddress;
+import java.util.Random;
 
 /**
  * Represents the protocol for building and sending packets between server and client.
@@ -11,9 +12,7 @@ public final class PacketProtocol {
     public static final int PI_PORT = 9090;
     // as MTU is 1500, use a maximal packet size of 1500:
     public static final int MAX_PACKET_SIZE = 1500;
-    // variables for own header:
     public static final int HEADER_SIZE = 20;
-    public static final int PSEUDOHEADER_SIZE = 12;
     // flags:
     public static final int HELLO = 1;
     public static final int ACK = 2;
@@ -23,9 +22,9 @@ public final class PacketProtocol {
     public static final int REPLACE = 32;
     public static final int LIST = 64;
     public static final int CLOSE = 128;
-    public static final int MOREFRAGMENTS = 256;
-    public static final int LASTFRAGMENT = 512;
-
+    public static final int DOESNOTEXIST = 256;
+    public static final int MOREFRAGMENTS = 512;
+    public static final int LASTFRAGMENT = 1024;
 
     /**
      * Creates the protocol.
@@ -41,7 +40,7 @@ public final class PacketProtocol {
      * @param flag           is the flag that is being set
      * @return the header as byte array (which is the same format as the datagram packet itself).
      */
-    public static byte[] createHeader(int fileSize, int sequenceNumber, int flag, byte[] pseudoheader) {
+    public static byte[] createHeader(int fileSize, int sequenceNumber, int offset, int flag) {
         int acknowledgementNumber = sequenceNumber + 1;
         byte[] header = new byte[HEADER_SIZE];
         // four bytes for size of total file without header:
@@ -64,41 +63,19 @@ public final class PacketProtocol {
         header[13] = (byte) ((offset >> 16) & 0xff);
         header[14] = (byte) ((offset >> 8) & 0xff);
         header[15] = (byte) (offset & 0xff);
-        // two bytes for the HELLO/ACK/UPLOAD/DOWNLOAD/REMOVE/REPLACE/LIST/CLOSE/MOREFRAGMENTS/LASTFRAGMENT flag(s):
-        header[16] = (byte) (flag >> 8); // room for 6 more flags if necessary
+        // two bytes for the HELLO/ACK/UPLOAD/DOWNLOAD/REMOVE/REPLACE/LIST/CLOSE/DOESNOTEXIST/MOREFRAGMENTS/LASTFRAGMENT flag(s):
+        header[16] = (byte) (flag >> 8); // room for 5 more flags if necessary
         header[17] = (byte) (flag & 0xff);
 
         // create a new byte array with all information that is needed for the checksum:
-        byte[] checksumInput = new byte[(HEADER_SIZE - 2) + PSEUDOHEADER_SIZE];
+        byte[] checksumInput = new byte[(HEADER_SIZE - 2)];
         // copy all information (except checksum information) from the header into this array:
         System.arraycopy(header, 0, checksumInput, 0, (HEADER_SIZE - 2));
-        // additionally, add all information from the pseudoheader into this array:
-        System.arraycopy(pseudoheader, 0, checksumInput, (HEADER_SIZE - 2), PSEUDOHEADER_SIZE);
 
         // two bytes for checksum:
         header[18] = (byte) (calculateChecksum(checksumInput) >> 8);
         header[19] = (byte) (calculateChecksum(checksumInput) & 0xff);
         return header;
-    }
-
-    /**
-     * Create pseudoheader for a more exaggerated checksum.
-     *
-     * @param sourceAddress      is the address from which the packet is sent.
-     * @param destinationAddress is the address to which the packet is sent.
-     * @param sourcePort         is the port the source uses for this connection.
-     * @param destinationPort    is the port the destination uses for this connection.
-     * @return the pseudoheader which includes this information.
-     */
-    public static byte[] createPseudoHeader(InetAddress sourceAddress, InetAddress destinationAddress, int sourcePort, int destinationPort) {
-        byte[] pseudoheader = new byte[PSEUDOHEADER_SIZE];
-        System.arraycopy(sourceAddress.getAddress(), 0, pseudoheader, 0, 4);
-        System.arraycopy(destinationAddress.getAddress(), 0, pseudoheader, 4, 4);
-        pseudoheader[8] = (byte) (sourcePort >> 8);
-        pseudoheader[9] = (byte) (sourcePort & 0xff);
-        pseudoheader[10] = (byte) (destinationPort >> 8);
-        pseudoheader[11] = (byte) (destinationPort & 0xff);
-        return pseudoheader;
     }
 
     /**
@@ -109,9 +86,9 @@ public final class PacketProtocol {
      * @param fileData       is the data of the actual file to be transmitted.
      * @return the byte array of the total packet (combination of header and data).
      */
-    public static byte[] createPacketWithHeader(int sequenceNumber, int flag, byte[] fileData, byte[] pseudoheader) {
+    public static byte[] createPacketWithHeader(int sequenceNumber, int offset, int flag, byte[] fileData) {
         int totalPacketSize = HEADER_SIZE + fileData.length;
-        byte[] header = createHeader(fileData.length, sequenceNumber, flag, pseudoheader);
+        byte[] header = createHeader(fileData.length, sequenceNumber, offset, flag);
         byte[] totalPacket = new byte[totalPacketSize];
         // copy header into total packet:
         for (int i = 0; i < HEADER_SIZE; i++) {
@@ -125,9 +102,24 @@ public final class PacketProtocol {
     }
 
     /**
+     * Generate random sequence number as every transmission starts with a random, unique sequence number and counts up
+     * from that point.
+     *
+     * @return the sequence number.
+     */
+    public static int generateRandomSequenceNumber() {
+        Random random = new Random();
+        // upperbound is 2^23: there are 4 bytes reserved for sequence number --> start with random number that takes a
+        // max of 3 bytes --> rest of space can be filled with increasing sequence number.
+        int upperbound = 8388608;
+        int randomInt = random.nextInt(upperbound);
+        return randomInt;
+    }
+
+    /**
      * Calculate the checksum.
      *
-     * @param checksumInput is the input for the checksum (header information and pseudoheader information).
+     * @param checksumInput is the input for the checksum (header information).
      * @return the inverse result of the checksum.
      */
     public static int calculateChecksum(byte[] checksumInput) {
@@ -200,7 +192,7 @@ public final class PacketProtocol {
      * @param packetWithHeader is the packet that includes the header.
      * @return the flags that are set.
      */
-    public int getFlag(byte[] packetWithHeader) {
+    public static int getFlag(byte[] packetWithHeader) {
         return ((packetWithHeader[16] << 8) | packetWithHeader[17]);
     }
 
@@ -221,7 +213,7 @@ public final class PacketProtocol {
      *
      * @param packetWithHeader is the total packet in which the inverse of the checksum (as calculated by the sender)
      *                         is available.
-     * @param checksumInput    is the information in the header and pseudoheader that is needed to recalculate the checksum
+     * @param checksumInput    is the information in the header that is needed to recalculate the checksum
      *                         (by the receiver)
      * @return true if these are the same, false if not
      */
