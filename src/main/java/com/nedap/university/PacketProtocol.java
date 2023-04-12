@@ -1,6 +1,5 @@
 package com.nedap.university;
 
-import java.net.InetAddress;
 import java.util.Random;
 
 /**
@@ -25,12 +24,6 @@ public final class PacketProtocol {
     public static final int DOESNOTEXIST = 256;
     public static final int MOREFRAGMENTS = 512;
     public static final int LASTFRAGMENT = 1024;
-
-    /**
-     * Creates the protocol.
-     */
-    private PacketProtocol() {
-    }
 
     /**
      * Create a header for the datagram packet to be able to use sequence numbers and acknowledgements for checking
