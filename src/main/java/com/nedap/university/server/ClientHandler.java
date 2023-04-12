@@ -1,5 +1,7 @@
 package com.nedap.university.server;
 
+import com.nedap.university.PacketProtocol;
+
 import java.io.IOException;
 import java.net.DatagramPacket;
 import java.net.DatagramSocket;
@@ -11,19 +13,12 @@ import java.net.InetAddress;
 public class ClientHandler {
     private Server server;
     private DatagramSocket serverSocket;
-    private final String UPLOAD = "UPLOAD";
-    private final String DOWNLOAD = "DOWNLOAD";
-    private final String REMOVE = "REMOVE";
-    private final String REPLACE = "REPLACE";
-    private final String LIST = "LIST";
-    private final String CLOSE = "CLOSE";
-
 
     /**
      * Create a clientHandler to be able to handle the input from the client that is connected to the server on the PI.
      *
      * @param serverSocket is the socket that is needed to be able to listen if data is coming in.
-     * @param server is the server (PI).
+     * @param server       is the server (PI).
      */
     public ClientHandler(DatagramSocket serverSocket, Server server) {
         this.serverSocket = serverSocket;
@@ -32,61 +27,62 @@ public class ClientHandler {
 
     public void start() {
         boolean connected = true;
-        while(connected) {
+        while (connected) {
             try {
                 byte[] buffer = new byte[256];
                 DatagramPacket packet = new DatagramPacket(buffer, buffer.length);
                 serverSocket.receive(packet);
                 InetAddress inetAddress = packet.getAddress();
                 int port = packet.getPort();
-                String messageFromClient = new String(packet.getData(), 0, packet.getLength());
-                System.out.println("Message from client: " + messageFromClient);
-                // respond with same message:
-                packet = new DatagramPacket(buffer, buffer.length, inetAddress, port);
-                serverSocket.send(packet);
+
+                byte[] receivedPacket = packet.getData();
+                int flag = PacketProtocol.getFlag(receivedPacket);
+                String fileNameInData = new String(packet.getData(), PacketProtocol.HEADER_SIZE, (packet.getLength() - PacketProtocol.HEADER_SIZE));
+                String[] split = fileNameInData.split("\\s+");
+                String fileName = null;
+                String oldFileName = null;
+                String newFileName = null;
+                if (split.length == 1) {
+                    fileName = split[0];
+                    server.setFileName(fileName);
+                } else {
+                    oldFileName = split[0];
+                    newFileName = split[1];
+                    server.setOldFileName(oldFileName);
+                    server.setNewFileName(newFileName);
+                }
+                switch (flag) {
+                    case PacketProtocol.UPLOAD:
+                        System.out.println("Client sent request for uploading " + fileName + ".");
+                        server.receiveFile(fileName, inetAddress, port, serverSocket);
+                        break;
+                    case PacketProtocol.DOWNLOAD:
+                        System.out.println("Client sent request for downloading " + fileName + ".");
+                        server.sendFile(fileName, inetAddress, port, serverSocket);
+                        break;
+                    case PacketProtocol.REMOVE:
+                        System.out.println("Client sent request for removing " + fileName + ".");
+                        server.removeFile(fileName, inetAddress, port, serverSocket);
+                        break;
+                    case PacketProtocol.REPLACE:
+                        System.out.println("Client sent request for replacing " + oldFileName + " by " + newFileName + ".");
+                        server.replaceFile(oldFileName, newFileName, inetAddress, port, serverSocket);
+                        break;
+                    case PacketProtocol.LIST:
+                        System.out.println("Client sent request for listing all available files.");
+                        server.listFiles(inetAddress, port, serverSocket);
+                        break;
+                    case PacketProtocol.CLOSE:
+                        System.out.println("Client sent request for closing the connection.");
+                        server.closeConnection(inetAddress, port, serverSocket);
+//                        connected = false;
+                        break;
+                }
             } catch (IOException e) {
-                e.printStackTrace();
+                e.printStackTrace(); //todo
                 break;
             }
         }
-
-//        boolean connected = true;
-//        while (connected) {
-//            String input = ;//todo 'read' flag from packet van maken!
-//            String[] split = input.split("\\s+");
-//            String command = split[0];
-//            String fileName = null;
-//            String oldFileName = null;
-//            String newFileName = null;
-//            if (split.length == 2) {
-//                fileName = split[1];
-//            } else if (split.length > 2) {
-//                oldFileName = split[1];
-//                newFileName = split[2];
-//            }
-//            switch (command) {
-//                case UPLOAD:
-//                    server.receiveFile(fileName);
-//                    break;
-//                case DOWNLOAD:
-//                    server.sendFile(fileName);
-//                    break;
-//                case REMOVE:
-//                    server.removeFile(fileName);
-//                    break;
-//                case REPLACE:
-//                    server.replaceFile(oldFileName, newFileName);
-//                    break;
-//                case LIST:
-//                    server.listFiles();
-//                    break;
-//                case CLOSE:
-//                    server.stop();
-//                    System.out.println("Application is closing.");
-//                default:
-//                    server.respondToUnknownRequest();
-//                    break;
-//            }
-//        }
+        System.out.println("Connection is closed (Message from ClientHandler).");
     }
 }

@@ -1,6 +1,4 @@
-package com.nedap.university;
-
-import com.nedap.university.server.Server;
+package com.nedap.university.server;
 
 public class Main {
 
@@ -11,24 +9,21 @@ public class Main {
 
     public static void main(String[] args) {
         running = true;
-        System.out.println("Hello, Nedap University!");
+        System.out.println("Hello, Arjonne!");
 
         initShutdownHook();
 
         while (keepAlive) {
             try {
-
-                // server class aanroepen en connectie maken
+                // create and start server:
                 Server server = new Server();
                 server.start();
 
-                // do useful stuff
                 Thread.sleep(1000);
             } catch (InterruptedException e) {
                 Thread.currentThread().interrupt();
             }
         }
-
         System.out.println("Stopped");
         running = false;
     }

@@ -1,9 +1,9 @@
 package com.nedap.university.server;
 
-import com.nedap.university.Protocol;
+import com.nedap.university.PacketProtocol;
 
-import java.net.DatagramSocket;
-import java.net.SocketException;
+import java.io.IOException;
+import java.net.*;
 import java.util.ArrayList;
 import java.util.List;
 
@@ -16,12 +16,16 @@ public class Server {
     private List<String> listOfFiles;
     private boolean isOpen;
     private DatagramSocket serverSocket;
+    private String fileName;
+    private String oldFileName;
+    private String newFileName;
+
     /**
      * Create the server with the port and address of the PI. Besides, a list is created
      */
     public Server() {
         // the port on which the server is listening on:
-        port = Protocol.PI_PORT;
+        port = PacketProtocol.PI_PORT;
         // a new list is created that stores all files that are available on the server:
         listOfFiles = new ArrayList<>();
         // after creating the server, it is not opened yet:
@@ -42,7 +46,6 @@ public class Server {
                 serverSocket = new DatagramSocket(port);
                 ClientHandler clientHandler = new ClientHandler(serverSocket, this);
                 clientHandler.start();
-                System.out.println("clientHandler started");
             } catch (SocketException e) {
                 System.out.println("Not able to start the server with this port.");
             }
@@ -74,11 +77,61 @@ public class Server {
     }
 
     /**
+     * Set fileName to the name of the file that is requested by the client.
+     * @param fileName is the name of the file.
+     */
+    public void setFileName(String fileName) {
+        this.fileName = fileName;
+    }
+
+    /**
+     * Set oldFileName to the name of the file that is requested to be replaced by the client.
+     * @param oldFileName is the name of the old (= to be replaced) file.
+     */
+    public void setOldFileName(String oldFileName) {
+        this.oldFileName = oldFileName;
+    }
+
+    /**
+     * Set newFileName to the name of the file that is requested by the client.
+     * @param newFileName is the name of the new file.
+     */
+    public void setNewFileName(String newFileName) {
+        this.newFileName = newFileName;
+    }
+
+    public void respondToClientRequest(int flag, InetAddress inetAddress, int port, DatagramSocket serverSocket) {
+        String responseMessage = null;
+        int sequenceNumber = PacketProtocol.generateRandomSequenceNumber();
+        if (flag == PacketProtocol.UPLOAD) {
+            responseMessage = ("Server successfully received the request for uploading " + fileName);
+        } else if (flag == PacketProtocol.DOWNLOAD) {
+            responseMessage = ("Server successfully received the request for downloading " + fileName);
+        } else if (flag == PacketProtocol.REMOVE) {
+            responseMessage = ("Server successfully received the request for removing " + fileName);
+        } else if (flag == PacketProtocol.REPLACE) {
+            responseMessage = ("Server successfully received the request for replacing " + oldFileName + " by " + newFileName);
+        } else if (flag == PacketProtocol.LIST) {
+            responseMessage = ("Server successfully received the request for listing all available files.");
+        } else if (flag == PacketProtocol.CLOSE) {
+            responseMessage = ("Server successfully received the request for closing the connection.");
+        }
+        byte[] response = PacketProtocol.createPacketWithHeader(sequenceNumber, 0, PacketProtocol.ACK, responseMessage.getBytes());
+        DatagramPacket responsePacket = new DatagramPacket(response, response.length, inetAddress, port);
+        try {
+            serverSocket.send(responsePacket);
+        } catch (IOException e) {
+            throw new RuntimeException(e); //todo
+        }
+    }
+
+    /**
      * Receive a file from the client on the server (PI).
      *
      * @param fileName is the file to be received.
      */
-    public void receiveFile(String fileName) {
+    public void receiveFile(String fileName, InetAddress inetAddress, int port, DatagramSocket serverSocket) {
+        respondToClientRequest(PacketProtocol.UPLOAD, inetAddress, port, serverSocket);
         // todo
     }
 
@@ -87,7 +140,8 @@ public class Server {
      *
      * @param fileName is the file to be sent.
      */
-    public void sendFile(String fileName) {
+    public void sendFile(String fileName, InetAddress inetAddress, int port, DatagramSocket serverSocket) {
+        respondToClientRequest(PacketProtocol.DOWNLOAD, inetAddress, port, serverSocket);
         // todo
     }
 
@@ -96,7 +150,9 @@ public class Server {
      *
      * @param fileName is the file to be removed.
      */
-    public void removeFile(String fileName) {
+    public void removeFile(String fileName, InetAddress inetAddress, int port, DatagramSocket serverSocket) {
+        respondToClientRequest(PacketProtocol.REMOVE, inetAddress, port, serverSocket);
+
         // todo
     }
 
@@ -106,22 +162,27 @@ public class Server {
      * @param oldFileName is the file to be replaced.
      * @param newFileName is the new file to be uploaded.
      */
-    public void replaceFile(String oldFileName, String newFileName) {
-        removeFile(oldFileName);
-        receiveFile(newFileName);
+    public void replaceFile(String oldFileName, String newFileName, InetAddress inetAddress, int port, DatagramSocket serverSocket) {
+        respondToClientRequest(PacketProtocol.REPLACE, inetAddress, port, serverSocket);
+//        removeFile(oldFileName, inetAddress, port, serverSocket);
+//        receiveFile(newFileName, inetAddress, port, serverSocket);
+        // todo
     }
 
     /**
      * List the files that are located on the server (PI).
      */
-    public void listFiles() {
+    public void listFiles(InetAddress inetAddress, int port, DatagramSocket serverSocket) {
+        respondToClientRequest(PacketProtocol.LIST, inetAddress, port, serverSocket);
         // todo
     }
 
     /**
-     * Respond to an unknown request by the client.
+     * Close the connection between server and client as response to the close request by the client.
      */
-    public void respondToUnknownRequest() {
+    public void closeConnection(InetAddress inetAddress, int port, DatagramSocket serverSocket) {
+        respondToClientRequest(PacketProtocol.CLOSE, inetAddress, port, serverSocket);
         // todo
     }
+
 }
