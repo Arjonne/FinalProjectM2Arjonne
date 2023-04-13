@@ -7,17 +7,47 @@ import java.util.List;
 public final class FileProtocol {
 
     /**
+     * Create request file based on input from TUI.
+     *
+     * @param fileName is the filename that the user has typed in the TUI.
+     * @return the data in the form of a byte array (which is needed for datagram packet) of the file.
+     */
+    public static byte[] createRequestFile(String fileName) {
+        byte[] request = fileName.getBytes();
+        return request;
+    }
+
+    /**
+     * Create an actual file path to be able to find stored files in a specific folder.
+     *
+     * @param filePathString is the string representation of the file path.
+     * @return the actual file path in which files can be found.
+     */
+    public static File createFilePath(String filePathString) {
+        File filePath = new File(filePathString);
+        return filePath;
+    }
+
+    /**
      * Create a byte array (which is the input for a Datagram Packet) from the file that needs to be sent.
      *
      * @param fileName is the name of the file that needs to be sent.
      * @return the byte representation of the file in an array.
      */
-    public byte[] fileToPacket(String fileName) {
+    public static byte[] fileToPacket(String fileName) {
         File file = new File(fileName);
-        FileInputStream fileInputStream = new FileInputStream(file);
-        byte[] fileInByteArray = new byte[(int) file.length()];
-        fileInputStream.read(fileInByteArray);
-        return fileInByteArray;
+        try {
+            FileInputStream fileInputStream = new FileInputStream(file);
+            byte[] fileInByteArray = new byte[(int) file.length()];
+            for (int i = 0; i < fileInByteArray.length; i++) {
+                byte nextByte = (byte) fileInputStream.read();
+                fileInByteArray[i] = nextByte;
+            }
+            return fileInByteArray;
+        } catch (IOException e) {
+            System.out.println("Could not copy byte representation of file into a new byte array.");
+            return null;
+        }
     }
 
     /**
@@ -27,12 +57,17 @@ public final class FileProtocol {
      * @param fileData is the data of the file in bytes.
      * @return the complete file.
      */
-    public File packetToFile(String fileName, byte[] fileData) {
+    public static void packetToFile(String fileName, byte[] fileData) {
         File file = new File(fileName);
-        FileOutputStream fileOutputStream = new FileOutputStream(file);
-        //todo in case of creating total file with header, change offset and length in next function:
-        File completeFile = fileOutputStream.write(fileData);
-        return completeFile;
+        try {
+            FileOutputStream fileOutputStream = new FileOutputStream(file);
+            //todo in case of creating total file with header, change offset and length in next function:
+            for (byte byteOfFileData : fileData) {
+                fileOutputStream.write(byteOfFileData);
+            }
+        } catch (IOException e) {
+            System.out.println("Could not write byte representation of file to actual file.");
+        }
     }
 
     /**
@@ -41,12 +76,10 @@ public final class FileProtocol {
      * @param filePath is the path with folder in which the files are stored.
      * @return the list of filenames.
      */
-    public List<String> createListOfFileNames(File filePath) {
+    public static List<String> createListOfFileNames(File filePath) {
         File[] listOfFiles = filePath.listFiles();
         List<String> listOfFileNames = new ArrayList<>();
-        if (listOfFiles.length == 0) {
-            String message = "No files available on the server.";
-        } else {
+        if (listOfFiles.length != 0) {
             for (File file : listOfFiles) {
                 String fileName = file.getName();
                 listOfFileNames.add(fileName);
@@ -62,12 +95,13 @@ public final class FileProtocol {
      * @param filePath        is the path with folder in which the files are stored.
      * @return true if file already exists, false if not.
      */
-    public boolean checkIfFileExists(String fileNameToCheck, File filePath) {
-        List<String> listOfFileNames = new ArrayList<>();
-        listOfFileNames = createListOfFileNames(filePath);
-        for (String fileName : listOfFileNames) {
-            if (fileName.equals(fileNameToCheck)) {
-                return true;
+    public static boolean checkIfFileExists(String fileNameToCheck, File filePath) {
+        List<String> listOfFileNames = createListOfFileNames(filePath);
+        if (!listOfFileNames.isEmpty()) {
+            for (String fileName : listOfFileNames) {
+                if (fileName.equals(fileNameToCheck)) {
+                    return true;
+                }
             }
         }
         return false;
@@ -79,11 +113,15 @@ public final class FileProtocol {
      * @param listOfFileNames is the list of file names to be sent.
      * @return the byte representation of the list.
      */
-    public byte[] createByteArrayOfFileNameList(List<String> listOfFileNames) {
+    public static byte[] createByteArrayOfFileNameList(List<String> listOfFileNames) {
         ByteArrayOutputStream out = new ByteArrayOutputStream();
-        ObjectOutputStream outputStream = new ObjectOutputStream(out);
-        outputStream.writeObject(listOfFileNames);
-        outputStream.close();
+        try {
+            ObjectOutputStream outputStream = new ObjectOutputStream(out);
+            outputStream.writeObject(listOfFileNames);
+            outputStream.close();
+        } catch (IOException e) {
+            System.out.println("Not able to create a byte array of the list of file names.");
+        }
         byte[] byteArrayOfFileNameList = out.toByteArray();
         return byteArrayOfFileNameList;
     }
@@ -95,8 +133,13 @@ public final class FileProtocol {
      * @return a readable list of file names (String representation).
      */
     public List<String> readByteArrayWithFileNameList(byte[] byteArrayOfFileNameList) {
-        ObjectInputStream inputStream = new ObjectInputStream(new ByteArrayInputStream(byteArrayOfFileNameList));
-        List<String> listOfFileNames = inputStream.readObject();
-        return listOfFileNames;
+        try {
+            ObjectInputStream inputStream = new ObjectInputStream(new ByteArrayInputStream(byteArrayOfFileNameList));
+//            List<String> listOfFileNames = inputStream.readObject();
+//            return listOfFileNames;
+        } catch (IOException e) {
+            e.printStackTrace(); // todo
+        }
+        return null;
     }
 }
