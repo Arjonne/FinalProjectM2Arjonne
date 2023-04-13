@@ -1,5 +1,6 @@
 package com.nedap.university.client;
 
+import com.nedap.university.FileProtocol;
 import com.nedap.university.PacketProtocol;
 
 import java.io.IOException;
@@ -14,9 +15,10 @@ public class Client implements Runnable {
     private ClientTUI clientTUI;
     private DatagramSocket clientSocket;
     private Thread clientThread;
-    private byte[] requestPacket;
     private boolean quit;
-    private boolean sendToServer;
+    private boolean tryToReceive;
+    int requestFlag;
+    DatagramPacket requestPacket;
 
     /**
      * Create a new client that uses the textual user interface for file transmission.
@@ -49,8 +51,9 @@ public class Client implements Runnable {
      * Stop the client thread and join the main thread.
      */
     public void stopClient() {
-        clientSocket.close();
         quit = true;
+        clientSocket.close();
+        System.out.println("Client is stopped.");
         try {
             clientThread.join();
         } catch (InterruptedException e) {
@@ -64,31 +67,35 @@ public class Client implements Runnable {
      */
     @Override
     public void run() {
-        System.out.println("Hello from Client");
-        int destinationPort = PacketProtocol.PI_PORT;
         quit = false;
         while (!quit) {
-            while (!sendToServer) {
+            while (!tryToReceive) {
                 try {
                     Thread.sleep(1000);
                 } catch (InterruptedException e) {
                     throw new RuntimeException(e); // todo
                 }
             }
-            try {
-                InetAddress inetAddress = InetAddress.getByName("localhost");
-//            InetAddress inetAddress = InetAddress.getByName(PacketProtocol.PI_ADDRESS);
-                DatagramPacket packetToSend = new DatagramPacket(requestPacket, requestPacket.length, inetAddress, destinationPort);
-                sendToServer = false;
-                clientSocket.send(packetToSend);
-                byte[] responsePacket = new byte[256];
-                DatagramPacket packetToReceive = new DatagramPacket(responsePacket, responsePacket.length);
-                clientSocket.receive(packetToReceive);
-                String messageFromServer = new String(packetToReceive.getData(), PacketProtocol.HEADER_SIZE, (packetToReceive.getLength() - PacketProtocol.HEADER_SIZE));
-                System.out.println(messageFromServer);
-            } catch (IOException e) {
-                e.printStackTrace(); // todo
+            if (requestFlag == PacketProtocol.DOWNLOAD || requestFlag == PacketProtocol.LIST) {
+                System.out.println("Try to receive file or list.");
+//                StopAndWaitProtocol.receiveFile(clientSocket);
+            } else {
+                if (receiveAcknowledgement()) {
+                    if (requestFlag == PacketProtocol.UPLOAD || requestFlag == PacketProtocol.REPLACE) {
+                        System.out.println("Try to send file.");
+//                        StopAndWaitProtocol.sendFile();
+                    } else if (requestFlag == PacketProtocol.CLOSE) {
+                        System.out.println("Client will be closed.");
+                        stopClient();
+                    } else if (receiveError()) {
+                        System.out.println("Try again: ");
+                    }
+                } else {
+                    System.out.println("Send request again: ACK was not received so server might not have received the request.");
+                    resendRequest(getRequestPacket());
+                }
             }
+            tryToReceive = false;
         }
         System.out.println("Connection is closed (Message from Client).");
     }
@@ -97,101 +104,144 @@ public class Client implements Runnable {
      * Set the boolean sendToServer to true when user has given input via TUI that needs to be communicated to the
      * server.
      */
-    public void activateSendToServer() {
-        sendToServer = true;
+    public void activateTryToReceive() {
+        tryToReceive = true;
     }
 
     /**
-     * Create file based on input from TUI.
+     * Send request to server.
      *
-     * @param fileName is the filename that the user has typed in the TUI.
-     * @return the data in the form of a byte array (which is needed for datagram packet) of the file.
+     * @param fileName is the name of the file with which the server needs to do something.
+     * @param flag     represents the action the server needs to do.
      */
-    public byte[] createFile(String fileName) {
-        byte[] file = fileName.getBytes();
-        return file;
+    public void sendRequest(String fileName, int flag) {
+        byte[] fileData = FileProtocol.createRequestFile(fileName);
+        int sequenceNumber = PacketProtocol.generateRandomSequenceNumber();
+        byte[] request = PacketProtocol.createPacketWithHeader(sequenceNumber, flag, fileData);
+        try {
+            DatagramPacket requestPacket = new DatagramPacket(request, request.length, InetAddress.getByName(PacketProtocol.PI_ADDRESS), PacketProtocol.PI_PORT);
+            setRequestPacket(requestPacket);
+            clientSocket.send(requestPacket);
+        } catch (IOException e) {
+            e.printStackTrace(); //todo
+        }
+        requestFlag = flag;
+        activateTryToReceive();
     }
 
     /**
-     * Upload a file from the client to the server on the PI.
+     * Send replace request to server (flag is internally set).
      *
-     * @param fileName is the file to be uploaded.
+     * @param oldFileName is the name of the file the server needs to replace.
+     * @param newFileName is the name of the new file the server needs to upload.
      */
-    public void doUpload(String fileName) {
-        byte[] fileData = createFile(fileName); // later aanpassen naar daadwerkelijke file ipv tekst.
+    public void sendReplaceRequest(String oldFileName, String newFileName) {
+        byte[] fileData = FileProtocol.createRequestFile(oldFileName + " " + newFileName);
         int sequenceNumber = PacketProtocol.generateRandomSequenceNumber();
-        requestPacket = PacketProtocol.createPacketWithHeader(sequenceNumber, 0, PacketProtocol.UPLOAD, fileData);
-        // when buffer is created, boolean can be set to true --> loop will continue and data will actually be sent.
-        activateSendToServer();
+        byte[] request = PacketProtocol.createPacketWithHeader(sequenceNumber, PacketProtocol.REPLACE, fileData);
+        try {
+            DatagramPacket requestPacket = new DatagramPacket(request, request.length, InetAddress.getByName(PacketProtocol.PI_ADDRESS), PacketProtocol.PI_PORT);
+            clientSocket.send(requestPacket);
+        } catch (IOException e) {
+            e.printStackTrace(); //todo
+        }
+        requestFlag = PacketProtocol.REPLACE;
+        activateTryToReceive();
     }
 
     /**
-     * Download a file from the server on the PI to the client.
+     * Send list request to server (flag is internally set and no file name(s) are needed here).
+     */
+    public void sendListOrCloseRequest(int flag) {
+        byte[] fileData = FileProtocol.createRequestFile("list all files");
+        int sequenceNumber = PacketProtocol.generateRandomSequenceNumber();
+        byte[] request = PacketProtocol.createPacketWithHeader(sequenceNumber, flag, fileData);
+        try {
+            DatagramPacket requestPacket = new DatagramPacket(request, request.length, InetAddress.getByName(PacketProtocol.PI_ADDRESS), PacketProtocol.PI_PORT);
+            clientSocket.send(requestPacket);
+        } catch (IOException e) {
+            e.printStackTrace(); //todo
+        }
+        requestFlag = flag;
+        activateTryToReceive();
+    }
+
+    /**
+     * Set the request DatagramPacket to the last request.
      *
-     * @param fileName is the file to be downloaded.
+     * @param requestPacket is the DatagramPacket that includes the last request.
      */
-    public void doDownload(String fileName) {
-        byte[] fileData = createFile(fileName);
-        int sequenceNumber = PacketProtocol.generateRandomSequenceNumber();
-        requestPacket = PacketProtocol.createPacketWithHeader(sequenceNumber, 0, PacketProtocol.DOWNLOAD, fileData);
-        activateSendToServer();
+    public void setRequestPacket(DatagramPacket requestPacket) {
+        this.requestPacket = requestPacket;
     }
 
     /**
-     * Remove a file from the server on the PI.
+     * Get the request DatagramPacket of the last request (in case a request is not received by the server and needs
+     * to be retransmitted).
      *
-     * @param fileName is the file to be removed.
+     * @return the request DatagramPacket.
      */
-    public void doRemove(String fileName) {
-        byte[] fileData = createFile(fileName);
-        int sequenceNumber = PacketProtocol.generateRandomSequenceNumber();
-        requestPacket = PacketProtocol.createPacketWithHeader(sequenceNumber, 0, PacketProtocol.REMOVE, fileData);
-        activateSendToServer();
+    public DatagramPacket getRequestPacket() {
+        return requestPacket;
     }
 
     /**
-     * Replace a file on the server on the PI by a new file.
+     * Send request DatagramPacket again in case acknowledgement was not received in time from the server (which might
+     * indicate that request never arrived as well).
      *
-     * @param oldFileName is the file to be replaced.
-     * @param newFileName is the new file.
+     * @param requestPacket is the DatagramPacket that includes the request that was last sent.
      */
-    public void doReplace(String oldFileName, String newFileName) {
-        byte[] fileData = createFile(oldFileName + " " + newFileName);
-        int sequenceNumber = PacketProtocol.generateRandomSequenceNumber();
-        requestPacket = PacketProtocol.createPacketWithHeader(sequenceNumber, 0, PacketProtocol.REPLACE, fileData);
-        activateSendToServer();
+    public void resendRequest(DatagramPacket requestPacket) {
+        try {
+            clientSocket.send(requestPacket);
+        } catch (IOException e) {
+            e.printStackTrace(); //todo
+        }
     }
 
     /**
-     * Show a list of the files that are stored on the server on the PI.
+     * Check if client has received an acknowledgement from the server (as response to the request).
+     *
+     * @return true if acknowledgement is received, false if not.
      */
-    public void doList() {
-        int sequenceNumber = PacketProtocol.generateRandomSequenceNumber();
-        requestPacket = PacketProtocol.createHeader(0, sequenceNumber, 0, PacketProtocol.LIST);
-        activateSendToServer();
+    public boolean receiveAcknowledgement() {
+        byte[] responsePacket = new byte[256];
+        DatagramPacket packetToReceive = new DatagramPacket(responsePacket, responsePacket.length);
+        try {
+            clientSocket.receive(packetToReceive);
+        } catch (IOException e) {
+            e.printStackTrace(); // todo
+        }
+        if (PacketProtocol.getFlag(packetToReceive.getData()) == (PacketProtocol.ACK)) {
+            String messageFromServer = new String(packetToReceive.getData(), PacketProtocol.HEADER_SIZE, (packetToReceive.getLength() - PacketProtocol.HEADER_SIZE));
+            System.out.println(messageFromServer);
+            return true;
+        } else {
+            return false;
+        }
     }
 
     /**
-     * Show the options of the commands that can be used in the TUI.
+     * Check if the client has received an error from the server (as response to the request). This error can indicate
+     * that a file already exists at the server (and therefore an upload cannot be performed), or that the file does not
+     * exist on the server yet (and therefore a removal or replacement cannot be performed, or no files can be listed).
+     *
+     * @return true if acknowledgement is received, false if not.
      */
-    public void showOptions() {
-        System.out.println("   Commands:\n" +
-                "          upload <file> ...................... upload <file> to server\n" +
-                "          download <file> .................... download <file> from server\n" +
-                "          remove <file> ...................... remove <file> from server\n" +
-                "          replace <old file> <new file>  ..... replace <old file> by <new file> on server\n" +
-                "          list ............................... list all files stored on server\n" +
-                "          options ............................ show options (this menu)\n" +
-                "          close .............................. close application"
-        );
-    }
-
-    /**
-     * Close the connection with the server.
-     */
-    public void doClose() {
-        int sequenceNumber = PacketProtocol.generateRandomSequenceNumber();
-        requestPacket = PacketProtocol.createHeader(0, sequenceNumber, 0, PacketProtocol.CLOSE);
-        activateSendToServer();
+    public boolean receiveError() {
+        byte[] responsePacket = new byte[256];
+        DatagramPacket packetToReceive = new DatagramPacket(responsePacket, responsePacket.length);
+        try {
+            clientSocket.receive(packetToReceive);
+        } catch (IOException e) {
+            e.printStackTrace(); // todo
+        }
+        if ((PacketProtocol.getFlag(packetToReceive.getData()) == (PacketProtocol.DOESALREADYEXIST + PacketProtocol.ACK)) || PacketProtocol.getFlag(packetToReceive.getData()) == (PacketProtocol.DOESNOTEXIST + PacketProtocol.ACK)) {
+            String messageFromServer = new String(packetToReceive.getData(), PacketProtocol.HEADER_SIZE, (packetToReceive.getLength() - PacketProtocol.HEADER_SIZE));
+            System.out.println(messageFromServer);
+            return true;
+        } else {
+            return false;
+        }
     }
 }

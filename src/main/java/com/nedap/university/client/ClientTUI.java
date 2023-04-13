@@ -1,6 +1,8 @@
 package com.nedap.university.client;
 
-import java.net.UnknownHostException;
+import com.nedap.university.FileProtocol;
+import com.nedap.university.PacketProtocol;
+
 import java.util.Scanner;
 
 /**
@@ -38,7 +40,7 @@ public class ClientTUI {
         if (client.startClient()) {
             System.out.println("Client started successfully. \nType OPTIONS to get an overview of the commands.");
         }
-        boolean close = false; // todo ook nog iets toevoegen dat pakket binnen moet zijn voor er verder gegaan wordt met volgende commando!
+        boolean close = false;
         while (!close) {
             Scanner scanner = new Scanner(System.in);
             System.out.println("Type your command: ");
@@ -56,33 +58,53 @@ public class ClientTUI {
             }
             switch (command) {
                 case UPLOAD:
-                    client.doUpload(fileName);
+                    client.sendRequest(fileName, PacketProtocol.UPLOAD);
                     break;
                 case DOWNLOAD:
-                    client.doDownload(fileName);
+                    if (!FileProtocol.checkIfFileExists(fileName, FileProtocol.createFilePath(PacketProtocol.CLIENT_FILEPATH))) {
+                        client.sendRequest(fileName, PacketProtocol.DOWNLOAD);
+                    } else {
+                        System.out.println("The file " + fileName + " already exists in your local folder " + PacketProtocol.CLIENT_FILEPATH + ", first remove this file if you want to download it again.");
+                    }
                     break;
                 case REMOVE:
-                    client.doRemove(fileName);
+                    client.sendRequest(fileName, PacketProtocol.REMOVE);
                     break;
                 case REPLACE:
-                    client.doReplace(oldFileName, newFileName);
+                    client.sendReplaceRequest(oldFileName, newFileName);
                     break;
                 case LIST:
-                    client.doList();
+                    client.sendListOrCloseRequest(PacketProtocol.LIST);
                     break;
                 case OPTIONS:
-                    client.showOptions();
+                    showOptions();
                     break;
                 case CLOSE:
-                    client.doClose();
-//                    System.out.println("Application is closing");
-//                    close = true;
+                    client.sendListOrCloseRequest(PacketProtocol.CLOSE);
+                    System.out.println("Application is closing");
+                    close = true;
                     break;
                 default:
                     System.out.println("The input is not correct. Use the following format:");
-                    client.showOptions();
+                    showOptions();
                     break;
             }
         }
+        System.out.println("out of the while loop ");
+    }
+
+    /**
+     * Show the options of the commands that can be used in the TUI.
+     */
+    public void showOptions() {
+        System.out.println("   Commands:\n" +
+                "          upload <file> ...................... upload <file> to server\n" +
+                "          download <file> .................... download <file> from server\n" +
+                "          remove <file> ...................... remove <file> from server\n" +
+                "          replace <old file> <new file>  ..... replace <old file> by <new file> on server\n" +
+                "          list ............................... list all files stored on server\n" +
+                "          options ............................ show options (this menu)\n" +
+                "          close .............................. close application"
+        );
     }
 }
