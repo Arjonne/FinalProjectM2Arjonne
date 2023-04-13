@@ -28,16 +28,17 @@ public class ClientHandler {
     public void start() {
         boolean connected = true;
         while (connected) {
-            try {
-                byte[] buffer = new byte[256];
-                DatagramPacket packet = new DatagramPacket(buffer, buffer.length);
-                serverSocket.receive(packet);
-                InetAddress inetAddress = packet.getAddress();
-                int port = packet.getPort();
-
-                byte[] receivedPacket = packet.getData();
-                int flag = PacketProtocol.getFlag(receivedPacket);
-                String fileNameInData = new String(packet.getData(), PacketProtocol.HEADER_SIZE, (packet.getLength() - PacketProtocol.HEADER_SIZE));
+            DatagramPacket receivedPacket = server.receiveRequest();
+            if (receivedPacket != null) {
+                // get the address and port number of the received packet:
+                InetAddress inetAddress = receivedPacket.getAddress();
+                int port = receivedPacket.getPort();
+                // put the data (including header) of the received packet into a byte array:
+                byte[] receivedPacketData = receivedPacket.getData();
+                // read the flag that is set in the packet that is received as a specific response needs to be sent:
+                int flag = PacketProtocol.getFlag(receivedPacketData);
+                // read the data (filename) that is sent in the packet (if applicable):
+                String fileNameInData = new String(receivedPacket.getData(), PacketProtocol.HEADER_SIZE, (receivedPacket.getLength() - PacketProtocol.HEADER_SIZE));
                 String[] split = fileNameInData.split("\\s+");
                 String fileName = null;
                 String oldFileName = null;
@@ -78,9 +79,6 @@ public class ClientHandler {
 //                        connected = false;
                         break;
                 }
-            } catch (IOException e) {
-                e.printStackTrace(); //todo
-                break;
             }
         }
         System.out.println("Connection is closed (Message from ClientHandler).");
