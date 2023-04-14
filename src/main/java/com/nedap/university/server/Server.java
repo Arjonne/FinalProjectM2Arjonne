@@ -20,6 +20,8 @@ public class Server {
     private String fileName;
     private String oldFileName;
     private String newFileName;
+    private int lastSentSeqNr;
+    private int lastReceivedSeqNr;
 
     /**
      * Create the server with the port and address of the PI. Besides, a list is created
@@ -88,6 +90,22 @@ public class Server {
         this.newFileName = newFileName;
     }
 
+    public void setLastSentSeqNr(int lastSentSeqNr) {
+        this.lastSentSeqNr = lastSentSeqNr;
+    }
+
+    public int getLastSentSeqNr() {
+        return lastSentSeqNr;
+    }
+
+    public void setLastReceivedSeqNr(int lastReceivedSeqNr) {
+        this.lastReceivedSeqNr = lastReceivedSeqNr;
+    }
+
+    public int getLastReceivedSeqNr() {
+        return lastReceivedSeqNr;
+    }
+
     /**
      * Receive the request packet from the client in order to be able to execute the request.
      *
@@ -116,9 +134,10 @@ public class Server {
      * @param responseMessage is the message that needs to  be sent.
      * @param flag            is the flag that needs to be set.
      */
-    public void respondToRequestOfClient(InetAddress inetAddress, int port, DatagramSocket serverSocket, String responseMessage, int flag) {
+    public void respondToRequestOfClient(InetAddress inetAddress, int port, DatagramSocket serverSocket, String responseMessage, int receivedSeqNr, int flag) {
         int sequenceNumber = PacketProtocol.generateRandomSequenceNumber();
-        byte[] response = PacketProtocol.createPacketWithHeader(0, sequenceNumber, flag, responseMessage.getBytes());
+        int acknowledgementNumber = receivedSeqNr;
+        byte[] response = PacketProtocol.createPacketWithHeader(0, sequenceNumber, acknowledgementNumber, flag, responseMessage.getBytes());
         DatagramPacket responsePacket = new DatagramPacket(response, response.length, inetAddress, port);
         try {
             serverSocket.send(responsePacket);
@@ -134,9 +153,10 @@ public class Server {
      * @param port        is the port to which the acknowledgement needs to be sent.
      * @param fileSize    is the total size of the file to be received by the client (and sent by the server).
      */
-    public void respondWithTotalFileSize(InetAddress inetAddress, int port, int fileSize) {
+    public void respondWithTotalFileSize(InetAddress inetAddress, int port, int fileSize, int receivedSeqNr) {
         int sequenceNumber = PacketProtocol.generateRandomSequenceNumber();
-        byte[] response = PacketProtocol.createHeader(fileSize, sequenceNumber, PacketProtocol.ACK);
+        int acknowledgementNumber = receivedSeqNr;
+        byte[] response = PacketProtocol.createHeader(fileSize, sequenceNumber, acknowledgementNumber, PacketProtocol.ACK);
         DatagramPacket responsePacket = new DatagramPacket(response, response.length, inetAddress, port);
         try {
             serverSocket.send(responsePacket);
@@ -160,6 +180,11 @@ public class Server {
             return false;
         }
         if (PacketProtocol.getFlag(packetToReceive.getData()) == (PacketProtocol.ACK)) {
+            // get information from this packet.
+            int lastSentSeqNr = PacketProtocol.getAcknowledgementNumber(packetToReceive.getData());
+            setLastSentSeqNr(lastSentSeqNr);
+            int lastReceivedSeqNr = PacketProtocol.getSequenceNumber(packetToReceive.getData());
+            setLastReceivedSeqNr(lastReceivedSeqNr);
             return true;
         } else {
             return false;
@@ -171,16 +196,16 @@ public class Server {
      *
      * @param fileName is the file to be received.
      */
-    public void receiveFile(String fileName, int totalFileSize, InetAddress inetAddress, int port, DatagramSocket serverSocket) {
+    public void receiveFile(String fileName, int totalFileSize, int receivedSeqNr, InetAddress inetAddress, int port, DatagramSocket serverSocket) {
         String responseMessage = ("Server successfully received the request for uploading " + fileName);
         File filePath = FileProtocol.createFilePath(FileProtocol.SERVER_FILEPATH);
         if (!FileProtocol.checkIfFileExists(fileName, filePath)) {
-            respondToRequestOfClient(inetAddress, port, serverSocket, responseMessage, PacketProtocol.ACK);
-//                StopAndWaitProtocol.receiveFile(serverSocket, totalFileSize, fileName);
+            respondToRequestOfClient(inetAddress, port, serverSocket, responseMessage, receivedSeqNr, PacketProtocol.ACK);
+                StopAndWaitProtocol.receiveFile(serverSocket, totalFileSize, fileName);
             System.out.println("Activate Stop and Wait protocol - receive file here.");
         } else {
             responseMessage = ("The server already has a file " + fileName + ". Therefore, upload cannot take place.");
-            respondToRequestOfClient(inetAddress, port, serverSocket, responseMessage, (PacketProtocol.DOESALREADYEXIST + PacketProtocol.ACK));
+            respondToRequestOfClient(inetAddress, port, serverSocket, responseMessage, receivedSeqNr, (PacketProtocol.DOESALREADYEXIST + PacketProtocol.ACK));
         }
     }
 
@@ -189,15 +214,18 @@ public class Server {
      *
      * @param fileName is the file to be sent.
      */
-    public void sendFile(String fileName, InetAddress inetAddress, int port, DatagramSocket serverSocket) {
+    public void sendFile(String fileName, int receivedSeqNr, InetAddress inetAddress, int port, DatagramSocket serverSocket) {
         File filePath = FileProtocol.createFilePath(FileProtocol.SERVER_FILEPATH);
         if (!FileProtocol.checkIfFileExists(fileName, filePath)) {
             String responseMessage = ("The file " + fileName + " does not exist on the server and can therefore not be downloaded.");
-            respondToRequestOfClient(inetAddress, port, serverSocket, responseMessage, (PacketProtocol.ACK + PacketProtocol.DOESNOTEXIST));
+            respondToRequestOfClient(inetAddress, port, serverSocket, responseMessage, receivedSeqNr, (PacketProtocol.ACK + PacketProtocol.DOESNOTEXIST));
         } else {
-            respondWithTotalFileSize(inetAddress, port, FileProtocol.getFileSize(FileProtocol.SERVER_FILEPATH, fileName));
+            respondWithTotalFileSize(inetAddress, port, FileProtocol.getFileSize(FileProtocol.SERVER_FILEPATH, fileName), receivedSeqNr);
             if (receiveAckFromClient()) {
-//                StopAndWaitProtocol.sendFile(fileToSendInBytes);
+                byte[] fileToSendInBytes = FileProtocol.fileToBytes(FileProtocol.SERVER_FILEPATH, fileName);
+                int lastUsedSeqNr = getLastSentSeqNr();
+                int lastReceivedSeqNr = getLastReceivedSeqNr();
+                StopAndWaitProtocol.sendFile(fileToSendInBytes, lastUsedSeqNr, lastReceivedSeqNr, serverSocket, inetAddress, port);
                 System.out.println("Activate Stop and Wait protocol - send list of files here if files are available.");
             }
         }
@@ -208,7 +236,7 @@ public class Server {
      *
      * @param fileName is the file to be removed.
      */
-    public void removeFile(String fileName, InetAddress inetAddress, int port, DatagramSocket serverSocket) {
+    public void removeFile(String fileName, int receivedSeqNr, InetAddress inetAddress, int port, DatagramSocket serverSocket) {
         String responseMessage = ("Server successfully received the request for removing " + fileName + ". File is removed.");
         File filePath = FileProtocol.createFilePath(FileProtocol.SERVER_FILEPATH);
         if (FileProtocol.checkIfFileExists(fileName, filePath)) {
@@ -218,10 +246,10 @@ public class Server {
                     file.delete();
                 }
             }
-            respondToRequestOfClient(inetAddress, port, serverSocket, responseMessage, PacketProtocol.ACK);
+            respondToRequestOfClient(inetAddress, port, serverSocket, responseMessage, receivedSeqNr, PacketProtocol.ACK);
         } else {
             responseMessage = (fileName + " cannot be removed by the server as it does not exist.");
-            respondToRequestOfClient(inetAddress, port, serverSocket, responseMessage, (PacketProtocol.DOESNOTEXIST + PacketProtocol.ACK));
+            respondToRequestOfClient(inetAddress, port, serverSocket, responseMessage, receivedSeqNr, (PacketProtocol.DOESNOTEXIST + PacketProtocol.ACK));
         }
     }
 
@@ -231,7 +259,7 @@ public class Server {
      * @param oldFileName is the file to be replaced.
      * @param newFileName is the new file to be uploaded.
      */
-    public void replaceFile(String oldFileName, String newFileName, int totalFileSize, InetAddress inetAddress,
+    public void replaceFile(String oldFileName, String newFileName, int totalFileSize, int receivedSeqNr, InetAddress inetAddress,
                             int port, DatagramSocket serverSocket) {
         String responseMessage = ("Server successfully received the request for replacing " + oldFileName + " by " + newFileName + ".");
         File filePath = FileProtocol.createFilePath(FileProtocol.SERVER_FILEPATH);
@@ -242,29 +270,31 @@ public class Server {
                     file.delete();
                 }
             }
-            respondToRequestOfClient(inetAddress, port, serverSocket, responseMessage, PacketProtocol.ACK);
-//                StopAndWaitProtocol.receiveFile(serverSocket, totalFileSize, newFileName);
+            respondToRequestOfClient(inetAddress, port, serverSocket, responseMessage, receivedSeqNr, PacketProtocol.ACK);
+                StopAndWaitProtocol.receiveFile(serverSocket, totalFileSize, newFileName);
         } else {
             responseMessage = (oldFileName + " cannot be replaced by the server as it does not exist.");
-            respondToRequestOfClient(inetAddress, port, serverSocket, responseMessage, (PacketProtocol.DOESNOTEXIST + PacketProtocol.ACK));
+            respondToRequestOfClient(inetAddress, port, serverSocket, responseMessage, receivedSeqNr, (PacketProtocol.DOESNOTEXIST + PacketProtocol.ACK));
         }
     }
 
     /**
      * List the files that are located on the server (PI).
      */
-    public void listFiles(InetAddress inetAddress, int port, DatagramSocket serverSocket) {
+    public void listFiles(int receivedSeqNr, InetAddress inetAddress, int port, DatagramSocket serverSocket) {
         File filePath = FileProtocol.createFilePath(FileProtocol.SERVER_FILEPATH);
         List<String> listOfFileNames = FileProtocol.createListOfFileNames(filePath);
         if (listOfFileNames.isEmpty()) {
             String responseMessage = ("There are no files stored on the server yet.");
-            respondToRequestOfClient(inetAddress, port, serverSocket, responseMessage, (PacketProtocol.ACK + PacketProtocol.DOESNOTEXIST));
+            respondToRequestOfClient(inetAddress, port, serverSocket, responseMessage, receivedSeqNr, (PacketProtocol.ACK + PacketProtocol.DOESNOTEXIST));
         } else {
             byte[] byteArrayOfFileNameList = FileProtocol.createByteArrayOfFileNameList(listOfFileNames);
             int fileSize = byteArrayOfFileNameList.length;
-            respondWithTotalFileSize(inetAddress, port, fileSize);
+            respondWithTotalFileSize(inetAddress, port, fileSize, receivedSeqNr);
             if (receiveAckFromClient()) {
-//                StopAndWaitProtocol.sendFile(byteArrayOfFileNameList);
+                int lastUsedSeqNr = getLastSentSeqNr();
+                int lastReceivedSeqNr = getLastReceivedSeqNr();
+                StopAndWaitProtocol.sendFile(byteArrayOfFileNameList, lastUsedSeqNr, lastReceivedSeqNr, serverSocket, inetAddress, port);
                 System.out.println("Activate Stop and Wait protocol - send list of files here if files are available.");
             }
         }
@@ -273,8 +303,8 @@ public class Server {
     /**
      * Close the connection between server and client as response to the close request by the client.
      */
-    public void respondToClosingClient(InetAddress inetAddress, int port, DatagramSocket serverSocket) {
+    public void respondToClosingClient(int receivedSeqNr, InetAddress inetAddress, int port, DatagramSocket serverSocket) {
         String responseMessage = ("Server successfully received that you are closing the application.");
-        respondToRequestOfClient(inetAddress, port, serverSocket, responseMessage, PacketProtocol.ACK);
+        respondToRequestOfClient(inetAddress, port, serverSocket, responseMessage, receivedSeqNr, PacketProtocol.ACK);
     }
 }

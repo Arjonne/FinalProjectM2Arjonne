@@ -2,11 +2,13 @@ package com.nedap.university.client;
 
 import com.nedap.university.FileProtocol;
 import com.nedap.university.PacketProtocol;
+import com.nedap.university.StopAndWaitProtocol;
 
 import java.io.IOException;
 import java.net.DatagramPacket;
 import java.net.DatagramSocket;
 import java.net.InetAddress;
+import java.net.UnknownHostException;
 
 /**
  * Represents the client for the file transfer.
@@ -22,6 +24,8 @@ public class Client implements Runnable {
     String newFileName;
     int requestFlag;
     int receivedFlag;
+    int receivedSeqNr;
+    int lastSentSeqNr;
     DatagramPacket requestPacket;
 
     /**
@@ -77,13 +81,20 @@ public class Client implements Runnable {
                 if (receivedFlag == PacketProtocol.ACK) {
                     if (requestFlag == PacketProtocol.DOWNLOAD || requestFlag == PacketProtocol.LIST) {
                         System.out.println("first try to receive file size OR list size");
-//                    int totalFileSize = getTotalFileSize();
+                        int totalFileSize = getTotalFileSize();
                         System.out.println("then, start SW protocol receive file.");
-//                StopAndWaitProtocol.receiveFile(clientSocket, totalFileSize, fileName);
+                        StopAndWaitProtocol.receiveFile(clientSocket, totalFileSize, fileName);
                         System.out.println("Give the command you want to execute next:");
                     } else if (requestFlag == PacketProtocol.UPLOAD || requestFlag == PacketProtocol.REPLACE) {
+                        int lastSentSeqNr = getLastSentSeqNr();
+                        int lastReceivedSeqNr = getReceivedSeqNr();
+                        byte[] dataOfFileToSend = FileProtocol.fileToBytes(FileProtocol.CLIENT_FILEPATH, fileName);
                         System.out.println("Try to send file.");
-//                        StopAndWaitProtocol.sendFile();
+                        try {
+                            StopAndWaitProtocol.sendFile(dataOfFileToSend, lastSentSeqNr, lastReceivedSeqNr, clientSocket, InetAddress.getByName(PacketProtocol.PI_ADDRESS), PacketProtocol.PI_PORT);
+                        } catch (UnknownHostException e) {
+                            throw new RuntimeException(e); // todo
+                        }
                         System.out.println("Give the command you want to execute next:");
                     } else if (requestFlag == PacketProtocol.CLOSE) {
                         stopClient();
@@ -117,7 +128,7 @@ public class Client implements Runnable {
     public void sendRequest(String fileNameFromRequest, int flag, int fileSize) {
         byte[] fileData = FileProtocol.createRequestFile(fileNameFromRequest);
         int sequenceNumber = PacketProtocol.generateRandomSequenceNumber();
-        byte[] request = PacketProtocol.createPacketWithHeader(fileSize, sequenceNumber, flag, fileData);
+        byte[] request = PacketProtocol.createPacketWithHeader(fileSize, sequenceNumber, 0, flag, fileData);
         try {
             DatagramPacket requestPacket = new DatagramPacket(request, request.length, InetAddress.getByName(PacketProtocol.PI_ADDRESS), PacketProtocol.PI_PORT);
             setRequestPacket(requestPacket);
@@ -125,6 +136,7 @@ public class Client implements Runnable {
         } catch (IOException e) {
             e.printStackTrace(); //todo
         }
+        setLastSentSeqNr(sequenceNumber);
         requestFlag = flag;
         fileName = fileNameFromRequest;
         activateTryToReceive();
@@ -141,13 +153,14 @@ public class Client implements Runnable {
     public void sendReplaceRequest(String oldFileNameFromRequest, String newFileNameFromRequest, int fileSize) {
         byte[] fileData = FileProtocol.createRequestFile(oldFileNameFromRequest + " " + newFileNameFromRequest);
         int sequenceNumber = PacketProtocol.generateRandomSequenceNumber();
-        byte[] request = PacketProtocol.createPacketWithHeader(fileSize, sequenceNumber, PacketProtocol.REPLACE, fileData);
+        byte[] request = PacketProtocol.createPacketWithHeader(fileSize, sequenceNumber, 0, PacketProtocol.REPLACE, fileData);
         try {
             DatagramPacket requestPacket = new DatagramPacket(request, request.length, InetAddress.getByName(PacketProtocol.PI_ADDRESS), PacketProtocol.PI_PORT);
             clientSocket.send(requestPacket);
         } catch (IOException e) {
             e.printStackTrace(); //todo
         }
+        setLastSentSeqNr(sequenceNumber);
         requestFlag = PacketProtocol.REPLACE;
         oldFileName = oldFileNameFromRequest;
         newFileName = newFileNameFromRequest;
@@ -159,13 +172,14 @@ public class Client implements Runnable {
      */
     public void sendListOrCloseRequest(int flag) {
         int sequenceNumber = PacketProtocol.generateRandomSequenceNumber();
-        byte[] request = PacketProtocol.createHeader(0, sequenceNumber, flag);
+        byte[] request = PacketProtocol.createHeader(0, sequenceNumber, 0, flag);
         try {
             DatagramPacket requestPacket = new DatagramPacket(request, request.length, InetAddress.getByName(PacketProtocol.PI_ADDRESS), PacketProtocol.PI_PORT);
             clientSocket.send(requestPacket);
         } catch (IOException e) {
             e.printStackTrace(); //todo
         }
+        setLastSentSeqNr(sequenceNumber);
         requestFlag = flag;
         activateTryToReceive();
     }
@@ -240,6 +254,42 @@ public class Client implements Runnable {
     }
 
     /**
+     * Get the last received sequence number in order to respond properly with an acknowledgement.
+     *
+     * @return the last received sequence number.
+     */
+    public int getReceivedSeqNr() {
+        return receivedSeqNr;
+    }
+
+    /**
+     * Set the last received sequence number in order to respond properly with an acknowledgement.
+     *
+     * @param receivedSeqNr is the received sequence number.
+     */
+    public void setReceivedSeqNr(int receivedSeqNr) {
+        this.receivedSeqNr = receivedSeqNr;
+    }
+
+    /**
+     * Get the last sequence number sent in order to properly increase this number in the next packet to send.
+     *
+     * @return the last sequence number sent.
+     */
+    public int getLastSentSeqNr() {
+        return lastSentSeqNr;
+    }
+
+    /**
+     * Set the last sequence number sent in order to properly increase this number in the next packet to send.
+     *
+     * @param lastSentSeqNr is the sequence number sent.
+     */
+    public void setLastSentSeqNr(int lastSentSeqNr) {
+        this.lastSentSeqNr = lastSentSeqNr;
+    }
+
+    /**
      * Check if client has received an acknowledgement from the server (as response to the request).
      *
      * @return true if acknowledgement is received, false if not.
@@ -256,8 +306,11 @@ public class Client implements Runnable {
         setReceivedFlag(PacketProtocol.getFlag(packetToReceive.getData()));
         if (getReceivedFlag() == (PacketProtocol.ACK)) {
             String messageFromServer = new String(packetToReceive.getData(), PacketProtocol.HEADER_SIZE, (packetToReceive.getLength() - PacketProtocol.HEADER_SIZE));
+            // get information from this acknowledgement and store it to be able to reuse it in the sending/receiving protocol.
             int totalFileSize = PacketProtocol.getFileSizeInPacket(packetToReceive.getData());
             setTotalFileSize(totalFileSize);
+            int receivedSeqNr = PacketProtocol.getSequenceNumber(packetToReceive.getData());
+            setReceivedSeqNr(receivedSeqNr);
             System.out.println(messageFromServer);
             return true;
         } else if ((getReceivedFlag() == (PacketProtocol.DOESALREADYEXIST + PacketProtocol.ACK)) || getReceivedFlag() == (PacketProtocol.DOESNOTEXIST + PacketProtocol.ACK)) {

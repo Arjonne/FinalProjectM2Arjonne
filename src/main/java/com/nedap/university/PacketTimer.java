@@ -1,27 +1,46 @@
 package com.nedap.university;
 
+import java.io.IOException;
+import java.net.DatagramPacket;
+import java.net.DatagramSocket;
 import java.util.Timer;
 import java.util.TimerTask;
 
+/**
+ * Represents the functions for creating and setting a timer for receiving acknowledgements.
+ */
 public class PacketTimer {
-    Timer timer;
-    public static final int RTT = 0; // todo check wat RTT is in milliseconds
+    private Timer timer;
+
+    public PacketTimer(Timer timer) {
+        this.timer = timer;
+    }
 
     /**
-     * Start timer for TTL - if acknowledgement is not received before, packet needs to be sent again.
+     * Start the timer and retransmit a packet when the timer expires.
      *
-     * @param milliseconds is the number of milliseconds after which the timer needs to expire.
+     * @param socket is the socket via which a packet needs to be retransmitted if the timer expires.
+     * @param packet is the packet that needs to be retransmitted if the timer expires.
      */
-    public void startTimer(int milliseconds) {
-        timer = new java.util.Timer();
+    public void startTimer(DatagramSocket socket, DatagramPacket packet) {
         TimerTask task = new TimerTask() {
             @Override
             public void run() {
-                System.out.println("Timer expired and no acknowledgement received -- send packet again!");
-                // boolean goed zetten // todo nadenken hoe en wat!
-                // waitingForAck = false;
+                System.out.println("Timer expired and no acknowledgement received -- send last packet again!");
+                try {
+                    socket.send(packet);
+                } catch (IOException e) {
+                    throw new RuntimeException(e); //todo
+                }
             }
         };
-        timer.schedule(task, milliseconds);
+        timer.schedule(task, PacketProtocol.RTT);
+    }
+
+    /**
+     * Stop the timer (in case the acknowledgement was received in time).
+     */
+    public void stopTimer() {
+        timer.cancel();
     }
 }

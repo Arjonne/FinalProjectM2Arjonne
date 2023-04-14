@@ -1,4 +1,4 @@
-zaq1§9## Initial configuration
+ zaq1§9## Initial configuration
 
 ### On your laptop
 

@@ -8,7 +8,7 @@ import java.util.Random;
 public final class PacketProtocol {
     // address and port of Raspberry Pi:
     public static final String PI_ADDRESS = "localhost";
-    //    public static final String PI_ADDRESS = "172.16.1.1";
+//    public static final String PI_ADDRESS = "172.16.1.1";
     public static final int PI_PORT = 9090;
     // as MTU is 1500, use a maximal packet size of 1500:
     public static final int MAX_PACKET_SIZE = 1500;
@@ -26,6 +26,7 @@ public final class PacketProtocol {
     public static final int MOREFRAGMENTS = 512;
     public static final int LAST = 1024;
     public static final int INCORRECT = 2048;
+    public static final int RTT = 3000; // todo check wat RTT is in milliseconds
 
     /**
      * Create a header for the datagram packet to be able to use sequence numbers and acknowledgements for checking
@@ -37,8 +38,7 @@ public final class PacketProtocol {
      * @param flag             is the flag that is being set.
      * @return the header as byte array (which is the same format as the datagram packet itself).
      */
-    public static byte[] createHeader(int totalFileSize, int sequenceNumber, int flag) {
-        int acknowledgementNumber = sequenceNumber + 1;
+    public static byte[] createHeader(int totalFileSize, int sequenceNumber, int acknowledgementNumber, int flag) {
         byte[] header = new byte[HEADER_SIZE];
         // four bytes for size of the total file without header:
         header[0] = (byte) (totalFileSize >> 24);
@@ -75,9 +75,9 @@ public final class PacketProtocol {
      * @param fileData       is the data of the actual file to be transmitted.
      * @return the byte array of the total packet (combination of header and data).
      */
-    public static byte[] createPacketWithHeader(int totalFileSize, int sequenceNumber, int flag, byte[] fileData) {
+    public static byte[] createPacketWithHeader(int totalFileSize, int sequenceNumber, int ackNumber, int flag, byte[] fileData) {
         int totalPacketSize = HEADER_SIZE + fileData.length;
-        byte[] header = createHeader(totalFileSize, sequenceNumber, flag);
+        byte[] header = createHeader(totalFileSize, sequenceNumber, ackNumber, flag);
         byte[] totalPacket = new byte[totalPacketSize];
         // copy header into total packet:
         for (int i = 0; i < HEADER_SIZE; i++) {

@@ -1,118 +1,183 @@
 package com.nedap.university;
 
+import java.io.File;
 import java.io.IOException;
 import java.net.DatagramPacket;
 import java.net.DatagramSocket;
-import java.util.Arrays;
+import java.net.InetAddress;
 import java.util.Timer;
-import java.util.TimerTask;
 
+/**
+ * Represents the protocol for sending and receiving packets according to the Stop and Wait ARQ protocol..
+ */
 public class StopAndWaitProtocol {
-    Timer timer;
-    public static final int RTT = 0; // todo check wat RTT is in milliseconds
+    static DatagramPacket lastPacketSent;
+    static int flag;
 
-    /**
-     * Start timer for TTL - if acknowledgement is not received before, packet needs to be sent again.
-     *
-     * @param milliseconds is the number of milliseconds after which the timer needs to expire.
-     */
-    public void startTimer(int milliseconds) {
-        timer = new Timer();
-        TimerTask task = new TimerTask() {
-            @Override
-            public void run() {
-                System.out.println("Timer expired and no acknowledgement received -- send packet again!");
-                // boolean goed zetten // todo nadenken hoe en wat!
-                // waitingForAck = false;
-            }
-        };
-        timer.schedule(task, milliseconds);
+    public static DatagramPacket getLastPacketSent() {
+        return lastPacketSent;
+    }
+
+    public static void setLastPacketSent(DatagramPacket lastPacketSent) {
+        StopAndWaitProtocol.lastPacketSent = lastPacketSent;
+    }
+
+    public static int getFlag() {
+        return flag;
+    }
+
+    public static void setFlag(int flag) {
+        StopAndWaitProtocol.flag = flag;
     }
 
     /**
      * Send a packet with file data and wait for acknowledgement to be received.
      *
-     * @param fileName    is the name of the file.
-     * @param socket      is the socket via which the data can be sent and received.
-     * @param totalPacket is the data of the total packet (including header).
+     * @param fileInBytes is the byte representation of the total file.
+     * @param socket is the socket via which the server and client are connected.
+     * @param address is the address to which the packet(s) need to be sent.
+     * @param port is the port to which the packet(s) need to be sent.
      */
-    public void send(String fileName, DatagramSocket socket, DatagramPacket totalPacket) {
-        System.out.println("Sending...");
+    public static void sendFile(byte[] fileInBytes, int lastUsedSequenceNumber, int lastReceivedSeqNr, DatagramSocket socket, InetAddress address, int port) {
+        System.out.println("Start sending file...");
         boolean finished = false;
-        boolean waitingForAck = true;
+        int totalNumberOfPackets = (fileInBytes.length / PacketProtocol.MAX_PACKET_SIZE);
+        int currentPacketNumber = 1;
+        int filePointerSender = 0;
+        int lastAckReceived = 0;
+        int sequenceNumber = lastUsedSequenceNumber + 1;
+        int acknowledgementNumber = lastReceivedSeqNr;
+        PacketTimer timer = new PacketTimer(new Timer());
+        DatagramPacket lastPacketSent = null;
         while (!finished) {
+            if (currentPacketNumber != totalNumberOfPackets) {
+                setFlag(PacketProtocol.MOREFRAGMENTS);
+            } else {
+                setFlag(PacketProtocol.LAST);
+            }
+            System.out.println("Sending packet " + currentPacketNumber + " out of " + totalNumberOfPackets + " packets.");
+            int dataLenghtInPacket = Math.min((PacketProtocol.MAX_PACKET_SIZE - PacketProtocol.HEADER_SIZE), (fileInBytes.length - filePointerSender));
+            byte[] dataToSend = new byte[dataLenghtInPacket];
+            // copy data of the total file into a smaller packet:
+            System.arraycopy(fileInBytes, filePointerSender, dataToSend, 0, dataLenghtInPacket);
+            byte[] dataWithHeader = PacketProtocol.createPacketWithHeader(fileInBytes.length, sequenceNumber, acknowledgementNumber, getFlag(), dataToSend);
+            DatagramPacket packetToSend = new DatagramPacket(dataWithHeader, dataWithHeader.length, address, port);
+            setLastPacketSent(packetToSend);
             try {
-                System.out.println("Sending packet " + fileName);
-                socket.send(totalPacket);
-                startTimer(RTT * 4);
-                while (waitingForAck) {
-                    DatagramPacket ackPacket = new DatagramPacket(); // todo packet creeeren en sturen.
-                    socket.receive(ackPacket);
-                    byte[] acknowledgement = ackPacket.getData();
-                    // check if acknowledgement is actually received, and if ACK flag is set:
-                    if ((acknowledgement != null) && acknowledgement[8] == PacketProtocol.ACK) {
-                        timer.cancel();
-                        System.out.println("Acknowledgement is successfully received.");
-                        waitingForAck = false;
+                socket.send(packetToSend);
+                System.out.println("Packet " + currentPacketNumber + " is sent.");
+                timer.startTimer(socket, getLastPacketSent());
+                byte[] acknowledgement = new byte[PacketProtocol.HEADER_SIZE];
+                DatagramPacket ackToReceive = new DatagramPacket(acknowledgement, acknowledgement.length);
+                socket.receive(ackToReceive);
+                // if ack is received and timer is not expired, stop the timer again:
+                timer.stopTimer();
+                // if you did receive an acknowledgement and did not receive the same acknowledgement twice, change
+                // variables to be able to send a new packet with additional file data.
+                if ((PacketProtocol.getFlag(acknowledgement) == PacketProtocol.ACK) && PacketProtocol.getAcknowledgementNumber(ackToReceive.getData()) != lastAckReceived) {
+                    if (getFlag() == PacketProtocol.LAST) {
                         finished = true;
                     } else {
-                        Thread.sleep(10); // todo check of nodig is!
+                        filePointerSender = filePointerSender + dataLenghtInPacket;
+                        if (sequenceNumber == 0xffffffff - 1) {
+                            acknowledgementNumber = sequenceNumber;
+                            sequenceNumber = 0;
+                        } else {
+                            acknowledgementNumber = sequenceNumber;
+                            sequenceNumber++;
+                        }
                     }
                 }
             } catch (IOException e) {
-                System.out.println("Not able to send or receive data.");
-            } catch (InterruptedException e) {
-                waitingForAck = false;
-                finished = true;
+                e.printStackTrace(); // todo
             }
         }
     }
+
 
     /**
      * Receive a packet with file data and send an acknowledgement as response.
      *
-     * @param socket is the socket via which the data can be sent and received.
+     * @param socket        is the socket via which the data can be sent and received.
+     * @param totalFileSize is the total size of the file that needs to be received.
+     * @param fileName      is the name of the file that needs to be received.
      */
-    public void receive(DatagramSocket socket) {
-        System.out.println("Receiving...");
-        byte[] fileData = new byte[0];
+    public static void receiveFile(DatagramSocket socket, int totalFileSize, String fileName) {
+        System.out.println("Start receiving file...");
+        byte[] dataCompleteFile = new byte[totalFileSize];
+        int lastSequenceNumberReceived = 0;
+        int filePointerReceiver = 0;
         boolean stopReceiving = false;
         while (!stopReceiving) {
             try {
-                DatagramPacket fileDataPacket = new DatagramPacket(); // todo packet creeeren
+                // create a buffer of maximal size to be able to receive as much data per packet as possible:
+                byte[] receivedPacket = new byte[PacketProtocol.MAX_PACKET_SIZE];
+                DatagramPacket fileDataPacket = new DatagramPacket(receivedPacket, receivedPacket.length);
                 socket.receive(fileDataPacket);
                 byte[] data = fileDataPacket.getData();
-                if (PacketProtocol.isChecksumCorrect(data)) {
-                    System.out.println("Packet successfully and correctly received."); // todo evt informatie toevoegen
-                    DatagramPacket acknowledgement = new DatagramPacket(); // todo create ack
-                    socket.send(acknowledgement);
-                    System.out.println("Acknowledgement is sent");
-                    int oldLength = fileData.length;
-                    int packetDataLength = data.length - PacketProtocol.HEADER_SIZE;
-                    fileData = Arrays.copyOf(fileData, oldLength + packetDataLength);
-                    System.arraycopy(data, PacketProtocol.HEADER_SIZE, fileData, oldLength, packetDataLength);
-                } else {
-                    try {
-                        Thread.sleep(10);
-                    } catch (InterruptedException e) {
-                        stopReceiving = true;
+                // get address and port of the destination this packet came from (and where an acknowledgement needs to
+                // be sent to):
+                InetAddress inetAddress = fileDataPacket.getAddress(); // todo checken of adres en poort kloppen.
+                int port = fileDataPacket.getPort();
+                int receivedSequenceNumber = PacketProtocol.getSequenceNumber(data);
+                int receivedAckNumber = PacketProtocol.getAcknowledgementNumber(data);
+                // only send acknowledgement if checksum is correct:
+                if (DataIntegrityCheck.isChecksumCorrect(data)) {
+                    System.out.println("Packet with sequence number " + receivedSequenceNumber + " successfully and correctly received.");
+                    int sequenceNumber = receivedAckNumber + 1;
+                    int ackNumber = receivedSequenceNumber;
+                    byte[] acknowledgement = PacketProtocol.createHeader(0, sequenceNumber, ackNumber, PacketProtocol.ACK);
+                    DatagramPacket acknowledgementPacket = new DatagramPacket(acknowledgement, acknowledgement.length, inetAddress, port);
+                    socket.send(acknowledgementPacket);
+                    System.out.println("Acknowledgement with number " + ackNumber + " is sent.");
+                    // check if you did not receive the same packet twice:
+                    if (lastSequenceNumberReceived != sequenceNumber) {
+                        int dataLengthInPacket = (data.length - PacketProtocol.HEADER_SIZE);
+                        System.arraycopy(data, PacketProtocol.HEADER_SIZE, dataCompleteFile, filePointerReceiver, dataLengthInPacket);
+                        filePointerReceiver = filePointerReceiver + dataLengthInPacket;
+                        lastSequenceNumberReceived = sequenceNumber;
                     }
+                    if (PacketProtocol.getFlag(data) == PacketProtocol.LAST) {
+                        // create file from data that is received:
+                        File receivedFile = FileProtocol.bytesToFile(fileName, dataCompleteFile);
+
+                        // check if received file and original file are the same:
+                        int hashCodeOfFile = receivedFile.hashCode();
+                        byte[] receiveHashcodeForCheck = new byte[PacketProtocol.MAX_PACKET_SIZE]; // todo check how large hashcode is.
+                        DatagramPacket receiveHashCode = new DatagramPacket(receiveHashcodeForCheck, receiveHashcodeForCheck.length);
+                        socket.receive(receiveHashCode);
+                        byte[] hashCode = receiveHashCode.getData();
+                        receivedSequenceNumber = PacketProtocol.getSequenceNumber(hashCode);
+                        receivedAckNumber = PacketProtocol.getAcknowledgementNumber(hashCode);
+                        sequenceNumber = receivedAckNumber + 1;
+                        ackNumber = receivedSequenceNumber;
+                        if (DataIntegrityCheck.isChecksumCorrect(hashCode)) {
+                            String hashCodeInString = hashCode.toString();
+                            int originalHashCode = Integer.getInteger(hashCodeInString);
+                            if (DataIntegrityCheck.areSentAndReceivedFilesTheSame(originalHashCode, hashCodeOfFile)) {
+                                byte[] finalAcknowledgement = PacketProtocol.createHeader(0, sequenceNumber, ackNumber, (PacketProtocol.ACK + PacketProtocol.LAST));
+                                DatagramPacket lastAcknowledgementPacket = new DatagramPacket(finalAcknowledgement, finalAcknowledgement.length, inetAddress, port);
+                                socket.send(lastAcknowledgementPacket);
+                                stopReceiving = true;
+                            } else {
+                                byte[] incorrectHashCode = PacketProtocol.createHeader(0, sequenceNumber, ackNumber, PacketProtocol.INCORRECT);
+                                DatagramPacket hashCodeIncorrect = new DatagramPacket(incorrectHashCode, incorrectHashCode.length, inetAddress, port);
+                                socket.send(hashCodeIncorrect);
+                                System.out.println("Hash code is not correct.");
+                                //todo receive total file again?
+                            }
+                        }
+                    }
+//                } else {
+//                    try {
+//                        Thread.sleep(10);
+//                    } catch (InterruptedException e) {
+//                        stopReceiving = true;
+//                    }
                 }
             } catch (IOException e) {
-                System.out.println("Not able to send or receive data.");
+                e.printStackTrace(); // todo
             }
         }
     }
-
-    // voorbeeld voor uploaden (downloaden werkt het zelfde maar andere kant uit!)
-
-    // 1. commando upload komt binnen via tui
-    // 2. pakket wordt gecreeerd met juiste flag
-    // 3. server ontvangt pakket en weet wat te doen (receiven)
-    // 4. server stuurt ack (bevestiging dat verzoek is binnengekomen)
-    // 5. als client ack heeft ontvangen, begint deze met sturen van de file
-    // 6. server probeert file te ontvangen
-    //      6.1 als file ontvangen is, wordt checksum gecheckt. als deze klopt, wort ack gestuurd, anders niet!!
-    //      6.2 als file niet ontvangen is, wordt er ook niets gestuurd.
-    // 7. als TTL is verlopen, stuurt client dezelfde file opnieuw.
 }

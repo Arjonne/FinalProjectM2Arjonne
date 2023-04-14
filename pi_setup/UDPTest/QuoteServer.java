@@ -5,7 +5,6 @@ import java.util.*;
 /**
  * This program demonstrates how to implement a UDP server program.
  *
- *
  * @author www.codejava.net
  */
 public class QuoteServer {

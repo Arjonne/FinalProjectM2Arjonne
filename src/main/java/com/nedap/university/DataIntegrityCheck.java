@@ -1,5 +1,8 @@
 package com.nedap.university;
 
+/**
+ * Represents the functions for checking whether the received file is the same as the file that is sent.
+ */
 public class DataIntegrityCheck {
 
     /**
@@ -8,19 +11,14 @@ public class DataIntegrityCheck {
      * inverse should result in only ones).
      *
      * @param packetWithHeader is the total packet in which the inverse of the checksum (as calculated by the sender)
-     *                         is available.
-     * @param checksumInput    is the information in the header that is needed to recalculate the checksum
-     *                         (by the receiver)
+     *                         is available. Besides, the checksum can be calculated over the header of the packet.
      * @return true if these are the same, false if not
      */
-    public boolean isChecksumCorrect(byte[] packetWithHeader, byte[] checksumInput) {
+    public static boolean isChecksumCorrect(byte[] packetWithHeader) {
         int checksumSent = PacketProtocol.getChecksum(packetWithHeader);
+        byte[] checksumInput = PacketProtocol.getChecksumInput(packetWithHeader);
         int checksumCalculated = PacketProtocol.calculateChecksum(checksumInput);
-        if (checksumSent + checksumCalculated == 0xffff) {
-            return true;
-        } else {
-            return false;
-        }
+        return checksumSent + checksumCalculated == 0xffff;
     }
 
     /**
@@ -30,7 +28,7 @@ public class DataIntegrityCheck {
      * @param hashCodeOfFileReceived is the hash code of the received file.
      * @return true if these hash codes are the same, false if not.
      */
-    public boolean areSentAndReceivedFilesTheSame(int hashCodeOfFileSent, int hashCodeOfFileReceived) {
+    public static boolean areSentAndReceivedFilesTheSame(int hashCodeOfFileSent, int hashCodeOfFileReceived) {
         return hashCodeOfFileSent == hashCodeOfFileReceived;
     }
 }

@@ -33,7 +33,7 @@ ssh.settings {
     knownHosts = allowAnyHosts // Disable host key verification
 }
 
-mainClassName = 'com.nedap.university.Main'
+mainClassName = 'com.nedap.university.server.Main'
 version = '0.0.1'
 
 jar {
