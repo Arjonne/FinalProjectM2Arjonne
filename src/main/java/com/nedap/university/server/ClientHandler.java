@@ -2,7 +2,6 @@ package com.nedap.university.server;
 
 import com.nedap.university.PacketProtocol;
 
-import java.io.IOException;
 import java.net.DatagramPacket;
 import java.net.DatagramSocket;
 import java.net.InetAddress;
@@ -37,6 +36,8 @@ public class ClientHandler {
                 byte[] receivedPacketData = receivedPacket.getData();
                 // read the flag that is set in the packet that is received as a specific response needs to be sent:
                 int flag = PacketProtocol.getFlag(receivedPacketData);
+                // read the file size of the file to be transmitted (if applicable):
+                int totalFileSize = PacketProtocol.getFileSizeInPacket(receivedPacketData);
                 // read the data (filename) that is sent in the packet (if applicable):
                 String fileNameInData = new String(receivedPacket.getData(), PacketProtocol.HEADER_SIZE, (receivedPacket.getLength() - PacketProtocol.HEADER_SIZE));
                 String[] split = fileNameInData.split("\\s+");
@@ -55,7 +56,7 @@ public class ClientHandler {
                 switch (flag) {
                     case PacketProtocol.UPLOAD:
                         System.out.println("Client sent request for uploading " + fileName + ".");
-                        server.receiveFile(fileName, inetAddress, port, serverSocket);
+                        server.receiveFile(fileName, totalFileSize, inetAddress, port, serverSocket);
                         break;
                     case PacketProtocol.DOWNLOAD:
                         System.out.println("Client sent request for downloading " + fileName + ".");
@@ -67,20 +68,19 @@ public class ClientHandler {
                         break;
                     case PacketProtocol.REPLACE:
                         System.out.println("Client sent request for replacing " + oldFileName + " by " + newFileName + ".");
-                        server.replaceFile(oldFileName, newFileName, inetAddress, port, serverSocket);
+                        server.replaceFile(oldFileName, newFileName, totalFileSize, inetAddress, port, serverSocket);
                         break;
                     case PacketProtocol.LIST:
                         System.out.println("Client sent request for listing all available files.");
                         server.listFiles(inetAddress, port, serverSocket);
                         break;
                     case PacketProtocol.CLOSE:
-                        System.out.println("Client sent request for closing the connection.");
-                        server.closeConnection(inetAddress, port, serverSocket);
-//                        connected = false;
+                        System.out.println("Client closed the application. If you want to close the server on the " +
+                                "Raspberry Pi too, use the following command: sudo shutdown -h now");
+                        server.respondToClosingClient(inetAddress, port, serverSocket);
                         break;
                 }
             }
         }
-        System.out.println("Connection is closed (Message from ClientHandler).");
     }
 }

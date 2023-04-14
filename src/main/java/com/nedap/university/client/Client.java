@@ -12,18 +12,20 @@ import java.net.InetAddress;
  * Represents the client for the file transfer.
  */
 public class Client implements Runnable {
-    private ClientTUI clientTUI;
+    ClientTUI clientTUI;
     private DatagramSocket clientSocket;
-    private Thread clientThread;
     private boolean quit;
     private boolean tryToReceive;
+    int totalFileSize;
+    String fileName;
+    String oldFileName;
+    String newFileName;
     int requestFlag;
+    int receivedFlag;
     DatagramPacket requestPacket;
 
     /**
      * Create a new client that uses the textual user interface for file transmission.
-     *
-     * @param clientTUI
      */
     public Client(ClientTUI clientTUI) {
         this.clientTUI = clientTUI;
@@ -38,7 +40,7 @@ public class Client implements Runnable {
     public boolean startClient() {
         try {
             clientSocket = new DatagramSocket();
-            clientThread = new Thread(this);
+            Thread clientThread = new Thread(this);
             clientThread.start();
             return true;
         } catch (IOException e) {
@@ -48,17 +50,12 @@ public class Client implements Runnable {
     }
 
     /**
-     * Stop the client thread and join the main thread.
+     * Stop the client and by doing so, close the TUI.
      */
     public void stopClient() {
         quit = true;
         clientSocket.close();
-        System.out.println("Client is stopped.");
-        try {
-            clientThread.join();
-        } catch (InterruptedException e) {
-            System.out.println("Cannot join main thread.");
-        }
+        System.out.println("Client has stopped, application is closed.");
     }
 
     /**
@@ -76,28 +73,30 @@ public class Client implements Runnable {
                     throw new RuntimeException(e); // todo
                 }
             }
-            if (requestFlag == PacketProtocol.DOWNLOAD || requestFlag == PacketProtocol.LIST) {
-                System.out.println("Try to receive file or list.");
-//                StopAndWaitProtocol.receiveFile(clientSocket);
-            } else {
-                if (receiveAcknowledgement()) {
-                    if (requestFlag == PacketProtocol.UPLOAD || requestFlag == PacketProtocol.REPLACE) {
+            if (receiveAckFromServer()) {
+                if (receivedFlag == PacketProtocol.ACK) {
+                    if (requestFlag == PacketProtocol.DOWNLOAD || requestFlag == PacketProtocol.LIST) {
+                        System.out.println("first try to receive file size OR list size");
+//                    int totalFileSize = getTotalFileSize();
+                        System.out.println("then, start SW protocol receive file.");
+//                StopAndWaitProtocol.receiveFile(clientSocket, totalFileSize, fileName);
+                        System.out.println("Give the command you want to execute next:");
+                    } else if (requestFlag == PacketProtocol.UPLOAD || requestFlag == PacketProtocol.REPLACE) {
                         System.out.println("Try to send file.");
 //                        StopAndWaitProtocol.sendFile();
+                        System.out.println("Give the command you want to execute next:");
                     } else if (requestFlag == PacketProtocol.CLOSE) {
-                        System.out.println("Client will be closed.");
                         stopClient();
-                    } else if (receiveError()) {
-                        System.out.println("Try again: ");
                     }
-                } else {
-                    System.out.println("Send request again: ACK was not received so server might not have received the request.");
-                    resendRequest(getRequestPacket());
+                } else if ((receivedFlag == (PacketProtocol.ACK + PacketProtocol.DOESNOTEXIST)) || (receivedFlag == (PacketProtocol.ACK + PacketProtocol.DOESALREADYEXIST))) {
+                    System.out.println("Give the command you want to execute next:");
                 }
+            } else {
+                System.out.println("Send request again: packet with ACK was not received so server might not have received the request.");
+                resendRequest(getRequestPacket());
             }
             tryToReceive = false;
         }
-        System.out.println("Connection is closed (Message from Client).");
     }
 
     /**
@@ -111,13 +110,14 @@ public class Client implements Runnable {
     /**
      * Send request to server.
      *
-     * @param fileName is the name of the file with which the server needs to do something.
-     * @param flag     represents the action the server needs to do.
+     * @param fileNameFromRequest is the name of the file (from the request of the user) with which the server needs
+     *                            to do something.
+     * @param flag                represents the action the server needs to do.
      */
-    public void sendRequest(String fileName, int flag) {
-        byte[] fileData = FileProtocol.createRequestFile(fileName);
+    public void sendRequest(String fileNameFromRequest, int flag, int fileSize) {
+        byte[] fileData = FileProtocol.createRequestFile(fileNameFromRequest);
         int sequenceNumber = PacketProtocol.generateRandomSequenceNumber();
-        byte[] request = PacketProtocol.createPacketWithHeader(sequenceNumber, flag, fileData);
+        byte[] request = PacketProtocol.createPacketWithHeader(fileSize, sequenceNumber, flag, fileData);
         try {
             DatagramPacket requestPacket = new DatagramPacket(request, request.length, InetAddress.getByName(PacketProtocol.PI_ADDRESS), PacketProtocol.PI_PORT);
             setRequestPacket(requestPacket);
@@ -126,19 +126,22 @@ public class Client implements Runnable {
             e.printStackTrace(); //todo
         }
         requestFlag = flag;
+        fileName = fileNameFromRequest;
         activateTryToReceive();
     }
 
     /**
      * Send replace request to server (flag is internally set).
      *
-     * @param oldFileName is the name of the file the server needs to replace.
-     * @param newFileName is the name of the new file the server needs to upload.
+     * @param oldFileNameFromRequest is the name of the file (from the request of the user) that the server needs to
+     *                               replace.
+     * @param newFileNameFromRequest is the name of the new file (from the request of the user) that the server needs
+     *                               to upload.
      */
-    public void sendReplaceRequest(String oldFileName, String newFileName) {
-        byte[] fileData = FileProtocol.createRequestFile(oldFileName + " " + newFileName);
+    public void sendReplaceRequest(String oldFileNameFromRequest, String newFileNameFromRequest, int fileSize) {
+        byte[] fileData = FileProtocol.createRequestFile(oldFileNameFromRequest + " " + newFileNameFromRequest);
         int sequenceNumber = PacketProtocol.generateRandomSequenceNumber();
-        byte[] request = PacketProtocol.createPacketWithHeader(sequenceNumber, PacketProtocol.REPLACE, fileData);
+        byte[] request = PacketProtocol.createPacketWithHeader(fileSize, sequenceNumber, PacketProtocol.REPLACE, fileData);
         try {
             DatagramPacket requestPacket = new DatagramPacket(request, request.length, InetAddress.getByName(PacketProtocol.PI_ADDRESS), PacketProtocol.PI_PORT);
             clientSocket.send(requestPacket);
@@ -146,6 +149,8 @@ public class Client implements Runnable {
             e.printStackTrace(); //todo
         }
         requestFlag = PacketProtocol.REPLACE;
+        oldFileName = oldFileNameFromRequest;
+        newFileName = newFileNameFromRequest;
         activateTryToReceive();
     }
 
@@ -153,9 +158,8 @@ public class Client implements Runnable {
      * Send list request to server (flag is internally set and no file name(s) are needed here).
      */
     public void sendListOrCloseRequest(int flag) {
-        byte[] fileData = FileProtocol.createRequestFile("list all files");
         int sequenceNumber = PacketProtocol.generateRandomSequenceNumber();
-        byte[] request = PacketProtocol.createPacketWithHeader(sequenceNumber, flag, fileData);
+        byte[] request = PacketProtocol.createHeader(0, sequenceNumber, flag);
         try {
             DatagramPacket requestPacket = new DatagramPacket(request, request.length, InetAddress.getByName(PacketProtocol.PI_ADDRESS), PacketProtocol.PI_PORT);
             clientSocket.send(requestPacket);
@@ -195,8 +199,44 @@ public class Client implements Runnable {
         try {
             clientSocket.send(requestPacket);
         } catch (IOException e) {
-            e.printStackTrace(); //todo
+            e.printStackTrace(); //todo boolean van maken true/false? blijven proberen...
         }
+    }
+
+    /**
+     * Set the variable totalFileSize to the actual total file size of the file to be transmitted.
+     *
+     * @param totalFileSize is the total size of the file to be transmitted.
+     */
+    public void setTotalFileSize(int totalFileSize) {
+        this.totalFileSize = totalFileSize;
+    }
+
+    /**
+     * Get the total file size of the file to be transmitted.
+     *
+     * @return the total file size.
+     */
+    public int getTotalFileSize() {
+        return totalFileSize;
+    }
+
+    /**
+     * Set the receivedFlag to the value of the flag(s) that are received in the acknowledgement.
+     *
+     * @param receivedFlag is the value of the received flag(s).
+     */
+    public void setReceivedFlag(int receivedFlag) {
+        this.receivedFlag = receivedFlag;
+    }
+
+    /**
+     * Get the flag(s) that is/are set in the acknowledgement packet that is received.
+     *
+     * @return the flag(s) that is/are set.
+     */
+    public int getReceivedFlag() {
+        return receivedFlag;
     }
 
     /**
@@ -204,39 +244,23 @@ public class Client implements Runnable {
      *
      * @return true if acknowledgement is received, false if not.
      */
-    public boolean receiveAcknowledgement() {
+    public boolean receiveAckFromServer() {
         byte[] responsePacket = new byte[256];
         DatagramPacket packetToReceive = new DatagramPacket(responsePacket, responsePacket.length);
         try {
             clientSocket.receive(packetToReceive);
         } catch (IOException e) {
             e.printStackTrace(); // todo
-        }
-        if (PacketProtocol.getFlag(packetToReceive.getData()) == (PacketProtocol.ACK)) {
-            String messageFromServer = new String(packetToReceive.getData(), PacketProtocol.HEADER_SIZE, (packetToReceive.getLength() - PacketProtocol.HEADER_SIZE));
-            System.out.println(messageFromServer);
-            return true;
-        } else {
             return false;
         }
-    }
-
-    /**
-     * Check if the client has received an error from the server (as response to the request). This error can indicate
-     * that a file already exists at the server (and therefore an upload cannot be performed), or that the file does not
-     * exist on the server yet (and therefore a removal or replacement cannot be performed, or no files can be listed).
-     *
-     * @return true if acknowledgement is received, false if not.
-     */
-    public boolean receiveError() {
-        byte[] responsePacket = new byte[256];
-        DatagramPacket packetToReceive = new DatagramPacket(responsePacket, responsePacket.length);
-        try {
-            clientSocket.receive(packetToReceive);
-        } catch (IOException e) {
-            e.printStackTrace(); // todo
-        }
-        if ((PacketProtocol.getFlag(packetToReceive.getData()) == (PacketProtocol.DOESALREADYEXIST + PacketProtocol.ACK)) || PacketProtocol.getFlag(packetToReceive.getData()) == (PacketProtocol.DOESNOTEXIST + PacketProtocol.ACK)) {
+        setReceivedFlag(PacketProtocol.getFlag(packetToReceive.getData()));
+        if (getReceivedFlag() == (PacketProtocol.ACK)) {
+            String messageFromServer = new String(packetToReceive.getData(), PacketProtocol.HEADER_SIZE, (packetToReceive.getLength() - PacketProtocol.HEADER_SIZE));
+            int totalFileSize = PacketProtocol.getFileSizeInPacket(packetToReceive.getData());
+            setTotalFileSize(totalFileSize);
+            System.out.println(messageFromServer);
+            return true;
+        } else if ((getReceivedFlag() == (PacketProtocol.DOESALREADYEXIST + PacketProtocol.ACK)) || getReceivedFlag() == (PacketProtocol.DOESNOTEXIST + PacketProtocol.ACK)) {
             String messageFromServer = new String(packetToReceive.getData(), PacketProtocol.HEADER_SIZE, (packetToReceive.getLength() - PacketProtocol.HEADER_SIZE));
             System.out.println(messageFromServer);
             return true;

@@ -9,14 +9,7 @@ import java.util.Scanner;
  * Represents the textual user interface of the client for interaction with the server.
  */
 public class ClientTUI {
-    private Client client;
-    private final String UPLOAD = "UPLOAD";
-    private final String DOWNLOAD = "DOWNLOAD";
-    private final String REMOVE = "REMOVE";
-    private final String REPLACE = "REPLACE";
-    private final String LIST = "LIST";
-    private final String OPTIONS = "OPTIONS";
-    private final String CLOSE = "CLOSE";
+    public boolean isCommandCompleted;
 
     /**
      * Creates the clientTUI.
@@ -36,15 +29,16 @@ public class ClientTUI {
      * Start the textual user interface. Ask for input and respond correctly to that input.
      */
     public void start() {
-        client = new Client(this);
+        Client client = new Client(this);
         if (client.startClient()) {
-            System.out.println("Client started successfully; you can now use the application. " +
-                    "\nType OPTIONS to get an overview of the commands you can use.");
+            System.out.println("Client started successfully; you can now use the application.\n" +
+                    "Type OPTIONS to get an overview of the commands you can use.\n\n" +
+                    "Give the command you want to execute:");
         }
         boolean close = false;
+        isCommandCompleted = true;
         while (!close) {
             Scanner scanner = new Scanner(System.in);
-            System.out.println("Type the command you want to execute: ");
             String input = scanner.nextLine();
             String[] split = input.split("\\s+");
             String command = split[0].toUpperCase();
@@ -58,49 +52,49 @@ public class ClientTUI {
                 newFileName = split[2];
             }
             switch (command) {
-                case UPLOAD:
+                case "UPLOAD":
                     if (fileName == null) {
                         System.out.println("File name should be added in the upload request. See OPTIONS for the correct format.");
-                    } else if (!FileProtocol.checkIfFileExists(fileName, FileProtocol.createFilePath(PacketProtocol.CLIENT_FILEPATH))) {
-                        System.out.println("The file " + fileName + " does not exist in your local folder " + PacketProtocol.CLIENT_FILEPATH + ", and can therefore not be uploaded to the server.");
+                    } else if (!FileProtocol.checkIfFileExists(fileName, FileProtocol.createFilePath(FileProtocol.CLIENT_FILEPATH))) {
+                        System.out.println("The file " + fileName + " does not exist in your local folder " + FileProtocol.CLIENT_FILEPATH + ", and can therefore not be uploaded to the server.");
                     } else {
-                        client.sendRequest(fileName, PacketProtocol.UPLOAD);
+                        client.sendRequest(fileName, PacketProtocol.UPLOAD, FileProtocol.getFileSize(FileProtocol.CLIENT_FILEPATH, fileName));
                     }
                     break;
-                case DOWNLOAD:
+                case "DOWNLOAD":
                     if (fileName == null) {
                         System.out.println("File name should be added in the download request. See OPTIONS for the correct format.");
                     } else {
-                        if (!FileProtocol.checkIfFileExists(fileName, FileProtocol.createFilePath(PacketProtocol.CLIENT_FILEPATH))) {
-                            client.sendRequest(fileName, PacketProtocol.DOWNLOAD);
+                        if (!FileProtocol.checkIfFileExists(fileName, FileProtocol.createFilePath(FileProtocol.CLIENT_FILEPATH))) {
+                            client.sendRequest(fileName, PacketProtocol.DOWNLOAD, 0);
                         } else {
-                            System.out.println("The file " + fileName + " already exists in your local folder " + PacketProtocol.CLIENT_FILEPATH + ", first remove this file if you want to download it again.");
+                            System.out.println("The file " + fileName + " already exists in your local folder " + FileProtocol.CLIENT_FILEPATH + ", first remove this file if you want to download it again.");
                         }
                     }
                     break;
-                case REMOVE:
+                case "REMOVE":
                     if (fileName == null) {
                         System.out.println("File name should be added in the remove request. See OPTIONS for the correct format.");
                     } else {
-                        client.sendRequest(fileName, PacketProtocol.REMOVE);
+                        client.sendRequest(fileName, PacketProtocol.REMOVE, 0);
                     }
                     break;
-                case REPLACE:
+                case "REPLACE":
                     if (oldFileName == null || newFileName == null) {
                         System.out.println("File name(s) should be added in the replace request. See OPTIONS for the correct format.");
-                    } else if (!FileProtocol.checkIfFileExists(newFileName, FileProtocol.createFilePath(PacketProtocol.CLIENT_FILEPATH))) {
-                        System.out.println("The file " + newFileName + " does not exist in your local folder " + PacketProtocol.CLIENT_FILEPATH + ", and can therefore not be used to replace " + oldFileName + ".");
+                    } else if (!FileProtocol.checkIfFileExists(newFileName, FileProtocol.createFilePath(FileProtocol.CLIENT_FILEPATH))) {
+                        System.out.println("The file " + newFileName + " does not exist in your local folder " + FileProtocol.CLIENT_FILEPATH + ", and can therefore not be used to replace " + oldFileName + ".");
                     } else {
-                        client.sendReplaceRequest(oldFileName, newFileName);
+                        client.sendReplaceRequest(oldFileName, newFileName, FileProtocol.getFileSize(FileProtocol.CLIENT_FILEPATH, newFileName));
                     }
                     break;
-                case LIST:
+                case "LIST":
                     client.sendListOrCloseRequest(PacketProtocol.LIST);
                     break;
-                case OPTIONS:
+                case "OPTIONS":
                     showOptions();
                     break;
-                case CLOSE:
+                case "CLOSE":
                     client.sendListOrCloseRequest(PacketProtocol.CLOSE);
                     System.out.println("Application is closing...");
                     close = true;

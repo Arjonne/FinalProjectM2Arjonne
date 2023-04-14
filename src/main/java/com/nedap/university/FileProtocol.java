@@ -4,7 +4,16 @@ import java.io.*;
 import java.util.ArrayList;
 import java.util.List;
 
+/**
+ * Represents the protocol for creating packet input from files and the other way around for the transmission between
+ * client and server.
+ */
 public final class FileProtocol {
+    // filePath for sending files using localHost:
+    public static final String CLIENT_FILEPATH = "/Users/arjonne.laar/Documents/module2/FinalProjectM2Arjonne/example_files/";
+    public static final String SERVER_FILEPATH = "/Users/arjonne.laar/Documents/module2/FinalProjectM2Arjonne/localserver/";
+//    public static final String SERVER_FILEPATH = "System.getProperty(\"user.dir\")";
+
 
     /**
      * Create request file based on input from TUI.
@@ -34,8 +43,8 @@ public final class FileProtocol {
      * @param fileName is the name of the file that needs to be sent.
      * @return the byte representation of the file in an array.
      */
-    public static byte[] fileToPacket(String fileName) {
-        File file = new File(fileName);
+    public static byte[] fileToBytes(String filePath, String fileName) {
+        File file = new File(filePath + fileName);
         try {
             FileInputStream fileInputStream = new FileInputStream(file);
             byte[] fileInByteArray = new byte[(int) file.length()];
@@ -57,7 +66,7 @@ public final class FileProtocol {
      * @param fileData is the data of the file in bytes.
      * @return the complete file.
      */
-    public static void packetToFile(String fileName, byte[] fileData) {
+    public static File bytesToFile(String fileName, byte[] fileData) {
         File file = new File(fileName);
         try {
             FileOutputStream fileOutputStream = new FileOutputStream(file);
@@ -65,9 +74,23 @@ public final class FileProtocol {
             for (byte byteOfFileData : fileData) {
                 fileOutputStream.write(byteOfFileData);
             }
+            return file;
         } catch (IOException e) {
             System.out.println("Could not write byte representation of file to actual file.");
+            return null;
         }
+    }
+
+    /**
+     * Get the file size of the file to be transmitted.
+     *
+     * @param fileName is the name of the file to be transmitted.
+     * @return the size of the file.
+     */
+    public static int getFileSize(String filePath, String fileName) {
+        byte[] fileToSendInBytes = fileToBytes(filePath, fileName);
+        int fileSize = fileToSendInBytes.length;
+        return fileSize;
     }
 
     /**
