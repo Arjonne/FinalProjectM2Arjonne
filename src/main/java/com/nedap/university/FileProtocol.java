@@ -1,8 +1,6 @@
 package com.nedap.university;
 
 import java.io.*;
-import java.util.ArrayList;
-import java.util.List;
 
 /**
  * Represents the protocol for creating packet input from files and the other way around for the transmission between
@@ -94,21 +92,30 @@ public final class FileProtocol {
     }
 
     /**
+     * Check if there are any files stored on the server.
+     *
+     * @param filePath is the path with folder in which the files should be stored.
+     * @return true if any files are stored, false if not.
+     */
+    public static boolean areFilesStoredOnServer(File filePath) {
+        File[] listOfFiles = filePath.listFiles();
+        return listOfFiles.length != 0;
+    }
+
+    /**
      * Create a list of all available files on the server.
      *
      * @param filePath is the path with folder in which the files are stored.
      * @return the list of filenames.
      */
-    public static List<String> createListOfFileNames(File filePath) {
+    public static String createListOfFileNames(File filePath) {
         File[] listOfFiles = filePath.listFiles();
-        List<String> listOfFileNames = new ArrayList<>();
-        if (listOfFiles.length != 0) {
-            for (File file : listOfFiles) {
-                String fileName = file.getName();
-                listOfFileNames.add(fileName);
-            }
+        String listedFiles = "The following files are stored on the server: \n";
+        for (File file : listOfFiles) {
+            String fileName = file.getName();
+            listedFiles = listedFiles + fileName + "\n";
         }
-        return listOfFileNames;
+        return listedFiles;
     }
 
     /**
@@ -119,50 +126,15 @@ public final class FileProtocol {
      * @return true if file already exists, false if not.
      */
     public static boolean checkIfFileExists(String fileNameToCheck, File filePath) {
-        List<String> listOfFileNames = createListOfFileNames(filePath);
-        if (!listOfFileNames.isEmpty()) {
-            for (String fileName : listOfFileNames) {
+        File[] listOfFiles = filePath.listFiles();
+        if (areFilesStoredOnServer(filePath)) {
+            for (File file : listOfFiles) {
+                String fileName = file.getName();
                 if (fileName.equals(fileNameToCheck)) {
                     return true;
                 }
             }
         }
         return false;
-    }
-
-    /**
-     * Create a list of file names that can be sent in a Datagram Packet.
-     *
-     * @param listOfFileNames is the list of file names to be sent.
-     * @return the byte representation of the list.
-     */
-    public static byte[] createByteArrayOfFileNameList(List<String> listOfFileNames) {
-        ByteArrayOutputStream out = new ByteArrayOutputStream();
-        try {
-            ObjectOutputStream outputStream = new ObjectOutputStream(out);
-            outputStream.writeObject(listOfFileNames);
-            outputStream.close();
-        } catch (IOException e) {
-            System.out.println("Not able to create a byte array of the list of file names.");
-        }
-        byte[] byteArrayOfFileNameList = out.toByteArray();
-        return byteArrayOfFileNameList;
-    }
-
-    /**
-     * Create a readable list of file names from the byte array input stream.
-     *
-     * @param byteArrayOfFileNameList is the list of file names represented in a byte array.
-     * @return a readable list of file names (String representation).
-     */
-    public List<String> readByteArrayWithFileNameList(byte[] byteArrayOfFileNameList) {
-        try {
-            ObjectInputStream inputStream = new ObjectInputStream(new ByteArrayInputStream(byteArrayOfFileNameList));
-//            List<String> listOfFileNames = inputStream.readObject();
-//            return listOfFileNames;
-        } catch (IOException e) {
-            e.printStackTrace(); // todo
-        }
-        return null;
     }
 }
