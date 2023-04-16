@@ -25,7 +25,8 @@ public final class PacketProtocol {
     public static final int DOESALREADYEXIST = 256;
     public static final int MOREFRAGMENTS = 512;
     public static final int LAST = 1024;
-    public static final int INCORRECT = 2048;
+    public static final int CHECK = 2048;
+    public static final int INCORRECT = 4096;
     public static final int RTT = 3000; // todo check wat RTT is in milliseconds
 
     /**
@@ -56,7 +57,7 @@ public final class PacketProtocol {
         header[10] = (byte) ((acknowledgementNumber >> 8) & 0xff);
         header[11] = (byte) (acknowledgementNumber & 0xff);
         // two bytes for the flag(s):
-        header[12] = (byte) (flag >> 8); // room for 4 more flags if necessary
+        header[12] = (byte) (flag >> 8); // room for 3 more flags if necessary
         header[13] = (byte) (flag & 0xff);
 
         // create a new byte array with all information that is needed for the checksum:
@@ -155,7 +156,7 @@ public final class PacketProtocol {
      * @return the total file size.
      */
     public static int getFileSizeInPacket(byte[] packetWithHeader) {
-        return (((packetWithHeader[0] << 24) & 0xff) | ((packetWithHeader[1] << 16) & 0xff) | ((packetWithHeader[2] << 8) & 0xff) | (packetWithHeader[3]) & 0xff);
+        return (((packetWithHeader[0] & 0xff) << 24) | ((packetWithHeader[1] & 0xff) << 16) | ((packetWithHeader[2] & 0xff) << 8) | (packetWithHeader[3] & 0xff));
     }
 
     /**
@@ -165,7 +166,7 @@ public final class PacketProtocol {
      * @return the sequence number.
      */
     public static int getSequenceNumber(byte[] packetWithHeader) {
-        return (((packetWithHeader[4] << 24) & 0xff) | ((packetWithHeader[5] << 16) & 0xff) | ((packetWithHeader[6] << 8) & 0xff) | (packetWithHeader[7]) & 0xff);
+        return (((packetWithHeader[4] & 0xff) << 24) | ((packetWithHeader[5] & 0xff) << 16) | ((packetWithHeader[6] & 0xff) << 8) | (packetWithHeader[7] & 0xff));
     }
 
     /**
@@ -175,7 +176,7 @@ public final class PacketProtocol {
      * @return the acknowledgement number.
      */
     public static int getAcknowledgementNumber(byte[] packetWithHeader) {
-        return (((packetWithHeader[8] << 24) & 0xff) | ((packetWithHeader[9] << 16) & 0xff) | ((packetWithHeader[10] << 8) & 0xff) | (packetWithHeader[11]) & 0xff);
+        return (((packetWithHeader[8] & 0xff) << 24) | ((packetWithHeader[9] & 0xff) << 16) | ((packetWithHeader[10] & 0xff) << 8) | (packetWithHeader[11] & 0xff));
     }
 
     /**
@@ -185,7 +186,7 @@ public final class PacketProtocol {
      * @return the flags that are set.
      */
     public static int getFlag(byte[] packetWithHeader) {
-        return (((packetWithHeader[12] << 8) & 0xff) | (packetWithHeader[13] & 0xff));
+        return (((packetWithHeader[12] & 0xff) << 8) | (packetWithHeader[13] & 0xff));
     }
 
     /**
@@ -195,6 +196,6 @@ public final class PacketProtocol {
      * @return the inverse checksum as calculated by the sender.
      */
     public static int getChecksum(byte[] packetWithHeader) {
-        return (((packetWithHeader[14] << 8) & 0xff) | (packetWithHeader[15] & 0xff));
+        return (((packetWithHeader[14] & 0xff) << 8) | (packetWithHeader[15] & 0xff));
     }
 }
