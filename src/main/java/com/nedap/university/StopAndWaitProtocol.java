@@ -9,17 +9,11 @@ import java.net.InetAddress;
  * Represents the protocol for sending and receiving packets according to the Stop and Wait ARQ protocol..
  */
 public class StopAndWaitProtocol {
-    static DatagramPacket lastPacketSent;
-    static int flag;
-    static byte[] completeFileInBytes;
+    public static int flag;
+    public static byte[] completeFileInBytes;
+    public static int lastReceivedSeqNr;
+    public static int lastReceivedAckNr;
 
-    public static DatagramPacket getLastPacketSent() {
-        return lastPacketSent;
-    }
-
-    public static void setLastPacketSent(DatagramPacket lastPacketSent) {
-        StopAndWaitProtocol.lastPacketSent = lastPacketSent;
-    }
 
     public static int getFlag() {
         return flag;
@@ -27,6 +21,22 @@ public class StopAndWaitProtocol {
 
     public static void setFlag(int flag) {
         StopAndWaitProtocol.flag = flag;
+    }
+
+    public static int getLastReceivedSeqNr() {
+        return lastReceivedSeqNr;
+    }
+
+    public static void setLastReceivedSeqNr(int lastReceivedSeqNr) {
+        StopAndWaitProtocol.lastReceivedSeqNr = lastReceivedSeqNr;
+    }
+
+    public static int getLastReceivedAckNr() {
+        return lastReceivedAckNr;
+    }
+
+    public static void setLastReceivedAckNr(int lastReceivedAckNr) {
+        StopAndWaitProtocol.lastReceivedAckNr = lastReceivedAckNr;
     }
 
     /**
@@ -81,13 +91,16 @@ public class StopAndWaitProtocol {
             // if you did receive an acknowledgement and did not receive the same acknowledgement twice, change
             // variables to be able to send a new packet with additional file data.
             if ((PacketProtocol.getFlag(acknowledgement) == PacketProtocol.ACK) && PacketProtocol.getAcknowledgementNumber(acknowledgement) != lastAckReceived) {
+                int lastReceivedSequenceNumber = PacketProtocol.getSequenceNumber(acknowledgement);
+                setLastReceivedSeqNr(lastReceivedSequenceNumber);
+                lastAckReceived = PacketProtocol.getAcknowledgementNumber(acknowledgement);
+                setLastReceivedAckNr(lastAckReceived);
                 if (getFlag() == PacketProtocol.LAST) {
-                    System.out.println("Hashcode must be sent here.");
                     finished = true;
-                    //todo send hash code!!!
                 } else {
                     filePointerSender = filePointerSender + dataLenghtInPacket;
                     acknowledgementNumber = PacketProtocol.getSequenceNumber(acknowledgement);
+                    currentPacketNumber++;
                     if (sequenceNumber == 0xffffffff - 1) {
                         sequenceNumber = 0;
                     } else {
@@ -104,9 +117,8 @@ public class StopAndWaitProtocol {
      *
      * @param socket        is the socket via which the data can be sent and received.
      * @param totalFileSize is the total size of the file that needs to be received.
-     * @param fileName      is the name of the file that needs to be received.
      */
-    public static void receiveFile(DatagramSocket socket, int totalFileSize, String fileName) {
+    public static void receiveFile(DatagramSocket socket, int totalFileSize) {
         System.out.println("Start receiving file...");
         byte[] dataCompleteFile = new byte[totalFileSize];
         int lastSequenceNumberReceived = 0;
@@ -151,7 +163,7 @@ public class StopAndWaitProtocol {
                     }
                     if (PacketProtocol.getFlag(dataOfReceivedPacket) == PacketProtocol.LAST) {
                         // store the byte representation of the received file in order to be able to do hash code check if necessary.
-                        setDataCompleteFile(dataCompleteFile);
+                        setFileInBytes(dataCompleteFile);
                         // create file from dataOfReceivedPacket that is received:
                         System.out.println("Last fragment was received.");
                         stopReceiving = true;
@@ -168,8 +180,8 @@ public class StopAndWaitProtocol {
      *
      * @param dataCompleteFile is the byte representation of the received file.
      */
-    public static void setDataCompleteFile(byte[] dataCompleteFile) {
-        byte[] completeFileInBytes = new byte[dataCompleteFile.length];
+    public static void setFileInBytes(byte[] dataCompleteFile) {
+        completeFileInBytes = new byte[dataCompleteFile.length];
         for (int i = 0; i < dataCompleteFile.length; i++) {
             completeFileInBytes[i] = dataCompleteFile[i];
         }
@@ -180,7 +192,7 @@ public class StopAndWaitProtocol {
      *
      * @return the byte representation of the received file.
      */
-    public byte[] getDataCompleteFile() {
+    public static byte[] getFileInBytes() {
         return completeFileInBytes;
     }
 }

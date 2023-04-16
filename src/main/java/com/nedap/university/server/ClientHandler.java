@@ -48,12 +48,9 @@ public class ClientHandler {
                 String newFileName = null;
                 if (split.length == 1) {
                     fileName = split[0];
-                    server.setFileName(fileName);
                 } else {
                     oldFileName = split[0];
                     newFileName = split[1];
-                    server.setOldFileName(oldFileName);
-                    server.setNewFileName(newFileName);
                 }
                 switch (flag) {
                     case PacketProtocol.UPLOAD:

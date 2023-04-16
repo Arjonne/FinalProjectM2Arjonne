@@ -118,7 +118,8 @@ public class ClientTUI {
                 "          replace <old file> <new file>  ..... replace <old file> by <new file> on server\n" +
                 "          list ............................... list all files stored on server\n" +
                 "          options ............................ show options (this menu)\n" +
-                "          close .............................. close application"
+                "          close .............................. close application\n\n" +
+                "Type the command you want to execute:"
         );
     }
 }

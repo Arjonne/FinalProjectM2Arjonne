@@ -12,16 +12,16 @@ public final class FileProtocol {
     public static final String SERVER_FILEPATH = "/Users/arjonne.laar/Documents/module2/FinalProjectM2Arjonne/localserver/";
 //    public static final String SERVER_FILEPATH = "/home/pi/Files/";
 
-
     /**
-     * Create request file based on input from TUI.
+     * Get the actual file.
      *
-     * @param fileName is the filename that the user has typed in the TUI.
-     * @return the data in the form of a byte array (which is needed for datagram packet) of the file.
+     * @param filePath is the path with folder where this file is stored.
+     * @param fileName is the name of the file.
+     * @return the actual file.
      */
-    public static byte[] createRequestFile(String fileName) {
-        byte[] request = fileName.getBytes();
-        return request;
+    public static File getFile(String filePath, String fileName) {
+        File file = new File(filePath + fileName);
+        return file;
     }
 
     /**
@@ -42,7 +42,7 @@ public final class FileProtocol {
      * @return the byte representation of the file in an array.
      */
     public static byte[] fileToBytes(String filePath, String fileName) {
-        File file = new File(filePath + fileName);
+        File file = getFile(filePath, fileName);
         try {
             FileInputStream fileInputStream = new FileInputStream(file);
             byte[] fileInByteArray = new byte[(int) file.length()];
@@ -64,19 +64,20 @@ public final class FileProtocol {
      * @param fileData is the data of the file in bytes.
      * @return the complete file.
      */
-    public static File bytesToFile(String fileName, byte[] fileData) {
-        File file = new File(fileName);
+    public static File bytesToFile(String filePathDestination, String fileName, byte[] fileData) {
+        File file = new File(filePathDestination + fileName);
         try {
-            FileOutputStream fileOutputStream = new FileOutputStream(file);
-            //todo in case of creating total file with header, change offset and length in next function:
-            for (byte byteOfFileData : fileData) {
-                fileOutputStream.write(byteOfFileData);
+            if (file.createNewFile()) {
+                FileOutputStream fileOutputStream = new FileOutputStream(file);
+                for (byte byteOfFileData : fileData) {
+                    fileOutputStream.write(byteOfFileData);
+                }
             }
-            return file;
         } catch (IOException e) {
             System.out.println("Could not write byte representation of file to actual file.");
             return null;
         }
+        return file;
     }
 
     /**

@@ -101,7 +101,7 @@ public final class PacketProtocol {
         Random random = new Random();
         // upperbound is the maximum number that can be represented in four bytes (number of bytes available for this
         // sequence number in the header).
-        int upperbound = 2147483647;
+        int upperbound = 0xfffffff;
         int randomInt = random.nextInt(upperbound);
         return randomInt;
     }

@@ -1,5 +1,6 @@
 package com.nedap.university.server;
 
+import com.nedap.university.DataIntegrityCheck;
 import com.nedap.university.FileProtocol;
 import com.nedap.university.PacketProtocol;
 import com.nedap.university.StopAndWaitProtocol;
@@ -128,7 +129,24 @@ public class Server {
         if (!FileProtocol.checkIfFileExists(fileName, filePath)) {
             respondToRequestOfClient(inetAddress, port, serverSocket, responseMessage, receivedSeqNr, PacketProtocol.ACK);
             System.out.println("Activate Stop and Wait protocol - receive file here.");
-            StopAndWaitProtocol.receiveFile(serverSocket, totalFileSize, fileName);
+            StopAndWaitProtocol.receiveFile(serverSocket, totalFileSize);
+            File uploadedFile = FileProtocol.bytesToFile(FileProtocol.SERVER_FILEPATH, fileName, StopAndWaitProtocol.getFileInBytes());
+            System.out.println("Try to receive hash code");
+//            if (DataIntegrityCheck.receiveHashCode(serverSocket) && (DataIntegrityCheck.getFlag() == PacketProtocol.CHECK)) {
+//                System.out.println("Hashcode is received.");
+//                int originalHashCode = DataIntegrityCheck.getHashCode();
+//                int hashCodeOfReceivedFile = uploadedFile.hashCode();
+//                receivedSeqNr = DataIntegrityCheck.getReceivedSeqNr();
+//                int receivedAckNumber = DataIntegrityCheck.getReceivedAckNr();
+//                if (DataIntegrityCheck.areSentAndReceivedFilesTheSame(originalHashCode, hashCodeOfReceivedFile)) {
+//                    System.out.println("The file is successfully uploaded.");
+//                    respondWithAck(receivedSeqNr, receivedAckNumber, serverSocket, inetAddress, port);
+//                } else {
+//                    uploadedFile.delete();
+//                    System.out.println("The file that the client wanted to upload is not the same as the original file on the client and is therefore not saved.");
+//                    respondWithIncorrect(receivedSeqNr, receivedAckNumber, serverSocket, inetAddress, port);
+//                }
+//            }
         } else {
             responseMessage = ("The server already has a file " + fileName + ". Therefore, upload cannot take place.");
             respondToRequestOfClient(inetAddress, port, serverSocket, responseMessage, receivedSeqNr, (PacketProtocol.DOESALREADYEXIST + PacketProtocol.ACK));
@@ -151,16 +169,26 @@ public class Server {
                 // get information from this packet:
                 byte[] ackReceived = getAckPacket();
                 int lastSentSeqNr = PacketProtocol.getAcknowledgementNumber(ackReceived);
-//                setLastSentSeqNr(lastSentSeqNr);
                 int lastReceivedSeqNr = PacketProtocol.getSequenceNumber(ackReceived);
-//                setLastReceivedSeqNr(lastReceivedSeqNr);
                 byte[] fileToSendInBytes = FileProtocol.fileToBytes(FileProtocol.SERVER_FILEPATH, fileName);
                 System.out.println("Start Stop and Wait protocol - send file here.");
                 StopAndWaitProtocol.sendFile(fileToSendInBytes, lastSentSeqNr, lastReceivedSeqNr, serverSocket, inetAddress, port);
-                // todo eerst send Hash
                 System.out.println("Send hash code");
-                // todo dan wacht op ACK of INCORRECT.
-                System.out.println("Wait for ACK or INCORRECT");
+
+//                int receivedAckNumber = StopAndWaitProtocol.getLastReceivedAckNr();
+//                int receivedSeqNumber = StopAndWaitProtocol.getLastReceivedSeqNr();
+//                File fileSent = FileProtocol.getFile(FileProtocol.SERVER_FILEPATH, fileName);
+//                int hashCode = fileSent.hashCode();
+//                DataIntegrityCheck.sendHashCode(hashCode, receivedSeqNumber, receivedAckNumber, serverSocket, inetAddress, port);
+//                if (receiveAcknowledgement(serverSocket)) {
+//                    int flag = PacketProtocol.getFlag(ackPacket);
+//                    if (flag == PacketProtocol.ACK) {
+//                        System.out.println(fileName + " is successfully downloaded by the client.");
+//                    } else {
+//                        System.out.println("The download of " + fileName + " was not successful. Wait for new input from the client.");
+//                    }
+//
+//                }
             }
         }
     }
@@ -210,7 +238,25 @@ public class Server {
             System.out.println(oldFileName + " is successfully removed.");
             respondToRequestOfClient(inetAddress, port, serverSocket, responseMessage, receivedSeqNr, PacketProtocol.ACK);
             System.out.println("start uploading new file by using receive function of sw");
-            StopAndWaitProtocol.receiveFile(serverSocket, totalFileSize, newFileName);
+            StopAndWaitProtocol.receiveFile(serverSocket, totalFileSize);
+
+            File uploadedFile = FileProtocol.bytesToFile(FileProtocol.SERVER_FILEPATH, newFileName, StopAndWaitProtocol.getFileInBytes());
+            System.out.println("Try to receive hash code");
+//            if (DataIntegrityCheck.receiveHashCode(serverSocket) && (DataIntegrityCheck.getFlag() == PacketProtocol.CHECK)) {
+//                System.out.println("Hashcode is received.");
+//                int originalHashCode = DataIntegrityCheck.getHashCode();
+//                int hashCodeOfReceivedFile = uploadedFile.hashCode();
+//                receivedSeqNr = DataIntegrityCheck.getReceivedSeqNr();
+//                int receivedAckNumber = DataIntegrityCheck.getReceivedAckNr();
+//                if (DataIntegrityCheck.areSentAndReceivedFilesTheSame(originalHashCode, hashCodeOfReceivedFile)) {
+//                    System.out.println("The file is successfully uploaded.");
+//                    respondWithAck(receivedSeqNr, receivedAckNumber, serverSocket, inetAddress, port);
+//                } else {
+//                    uploadedFile.delete();
+//                    System.out.println("The file that the client wanted to upload is not the same as the original file on the client and is therefore not saved.");
+//                    respondWithIncorrect(receivedSeqNr, receivedAckNumber, serverSocket, inetAddress, port);
+//                }
+//            }
         } else {
             responseMessage = (oldFileName + " cannot be replaced by the server as it does not exist.");
             respondToRequestOfClient(inetAddress, port, serverSocket, responseMessage, receivedSeqNr, (PacketProtocol.DOESNOTEXIST + PacketProtocol.ACK));
@@ -262,6 +308,30 @@ public class Server {
             return true;
         } catch (IOException e) {
             return false;
+        }
+    }
+
+    public void respondWithAck(int receivedSeqNumber, int receivedAckNumber, DatagramSocket socket, InetAddress address, int port) {
+        int sequenceNumber = receivedAckNumber + 1;
+        int acknowledgementNumber = receivedSeqNumber;
+        byte[] acknowledgement = PacketProtocol.createHeader(0, sequenceNumber, acknowledgementNumber, PacketProtocol.ACK);
+        DatagramPacket ackPacket = new DatagramPacket(acknowledgement, acknowledgement.length, address, port);
+        try {
+            socket.send(ackPacket);
+        } catch (IOException e) {
+            // todo
+        }
+    }
+
+    public void respondWithIncorrect(int receivedSeqNumber, int receivedAckNumber, DatagramSocket socket, InetAddress address, int port) {
+        int sequenceNumber = receivedAckNumber + 1;
+        int acknowledgementNumber = receivedSeqNumber;
+        byte[] acknowledgement = PacketProtocol.createHeader(0, sequenceNumber, acknowledgementNumber, PacketProtocol.INCORRECT);
+        DatagramPacket ackPacket = new DatagramPacket(acknowledgement, acknowledgement.length, address, port);
+        try {
+            socket.send(ackPacket);
+        } catch (IOException e) {
+            // todo
         }
     }
 
