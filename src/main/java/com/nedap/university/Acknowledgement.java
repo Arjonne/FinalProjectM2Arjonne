@@ -1,11 +1,12 @@
 package com.nedap.university;
 
+import javax.xml.crypto.Data;
 import java.io.IOException;
 import java.net.DatagramPacket;
 import java.net.DatagramSocket;
 import java.net.InetAddress;
 
-public class Acknowledgement {
+public final class Acknowledgement {
     static byte[] acknowledgement;
 
     public static DatagramPacket createAckPacketToReceive() {
@@ -20,12 +21,20 @@ public class Acknowledgement {
         return ackWithMessageToReceive;
     }
 
-    public static DatagramPacket createInitialAck(int optionalExtraFlag, int totalFileSize, int receivedSeqNr, String message, InetAddress address, int port) {
+    public static DatagramPacket createInitialAckToSend(int optionalExtraFlag, int totalFileSize, int receivedSeqNr, String message, InetAddress address, int port) {
         int sequenceNumber = PacketProtocol.generateRandomSequenceNumber();
         int acknowledgementNumber = receivedSeqNr;
         byte[] acknowledgement = PacketProtocol.createPacketWithHeader(totalFileSize, sequenceNumber, acknowledgementNumber, (PacketProtocol.ACK + optionalExtraFlag), message.getBytes());
         DatagramPacket initialAckWithMessagePacket = new DatagramPacket(acknowledgement, acknowledgement.length, address, port);
         return initialAckWithMessagePacket;
+    }
+
+    public static DatagramPacket createAckToSend(int optionalExtraFlag, int receivedSeqNumber, int receivedAckNumber, InetAddress address, int port) {
+        int sequenceNumber = receivedAckNumber + 1;
+        int acknowledgementNumber = receivedSeqNumber;
+        byte[] acknowledgement = PacketProtocol.createHeader(0, sequenceNumber, acknowledgementNumber, (PacketProtocol.ACK + optionalExtraFlag), 0);
+        DatagramPacket ackPacket = new DatagramPacket(acknowledgement, acknowledgement.length, address, port);
+        return ackPacket;
     }
 
     /**
@@ -39,13 +48,9 @@ public class Acknowledgement {
      * @param port              is the port to which the acknowledgement must be sent.
      */
     public static void sendAcknowledgement(int optionalExtraFlag, int receivedSeqNumber, int receivedAckNumber, DatagramSocket socket, InetAddress address, int port) {
-        int sequenceNumber = receivedAckNumber + 1;
-        int acknowledgementNumber = receivedSeqNumber;
-        byte[] acknowledgement = PacketProtocol.createHeader(0, sequenceNumber, acknowledgementNumber, (PacketProtocol.ACK + optionalExtraFlag), 0);
-        DatagramPacket ackPacket = new DatagramPacket(acknowledgement, acknowledgement.length, address, port);
+        DatagramPacket ackPacket = createAckToSend(optionalExtraFlag, receivedSeqNumber, receivedAckNumber, address, port);
         try {
             socket.send(ackPacket);
-            System.out.println("ACK with seq nr:" + sequenceNumber + " and ack nr: " + acknowledgementNumber + " is sent.");
         } catch (IOException e) {
             e.printStackTrace(); //todo
         }
@@ -65,7 +70,7 @@ public class Acknowledgement {
      * @param port              is the port to which the acknowledgement needs to be sent.
      */
     public static void sendInitialAcknowledgementWithMessage(int optionalExtraFlag, int totalFileSize, int receivedSeqNr, String message, DatagramSocket socket, InetAddress address, int port) {
-        DatagramPacket initialAckWithMessagePacket =  createInitialAck(optionalExtraFlag, totalFileSize, receivedSeqNr, message, address, port);
+        DatagramPacket initialAckWithMessagePacket =  createInitialAckToSend(optionalExtraFlag, totalFileSize, receivedSeqNr, message, address, port);
         try {
             socket.send(initialAckWithMessagePacket);
         } catch (IOException e) {
@@ -97,7 +102,7 @@ public class Acknowledgement {
     }
 
     public static void receiveAckOnFileSize(int optionalExtraFlag, int totalFileSize, int receivedSeqNr, String message, InetAddress address, int port, DatagramSocket socket) {
-        DatagramPacket initialAckPacketWithFileSize = createInitialAck(optionalExtraFlag, totalFileSize, receivedSeqNr, message, address, port);
+        DatagramPacket initialAckPacketWithFileSize = createInitialAckToSend(optionalExtraFlag, totalFileSize, receivedSeqNr, message, address, port);
         DatagramPacket ackToReceive = createAckPacketToReceive();
         tryToReceiveAck(socket, ackToReceive, initialAckPacketWithFileSize);
     }

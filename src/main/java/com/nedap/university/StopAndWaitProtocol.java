@@ -14,7 +14,6 @@ public class StopAndWaitProtocol {
     public static int lastReceivedSeqNr;
     public static int lastReceivedAckNr;
 
-
     public static int getFlag() {
         return flag;
     }

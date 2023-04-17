@@ -62,10 +62,10 @@ public final class PacketProtocol {
         header[13] = (byte) (flag & 0xff);
 
         // create a new byte array with all information that is needed for the checksum:
-        byte[] checksumInput = getChecksumInput(header, payloadLength);
+        byte[] checksumInput = DataIntegrityCheck.getChecksumInput(header, payloadLength);
         // two bytes for checksum:
-        header[14] = (byte) (calculateChecksum(checksumInput) >> 8);
-        header[15] = (byte) (calculateChecksum(checksumInput) & 0xff);
+        header[14] = (byte) (DataIntegrityCheck.calculateChecksum(checksumInput) >> 8);
+        header[15] = (byte) (DataIntegrityCheck.calculateChecksum(checksumInput) & 0xff);
         return header;
     }
 
@@ -105,53 +105,6 @@ public final class PacketProtocol {
         int upperbound = 0xfffffff;
         int randomInt = random.nextInt(upperbound);
         return randomInt;
-    }
-
-    /**
-     * Calculate the checksum.
-     *
-     * @param checksumInput is the input for the checksum (header information).
-     * @return the inverse result of the checksum.
-     */
-    public static int calculateChecksum(byte[] checksumInput) {
-        int checksum = 0;
-        int length = checksumInput.length;
-        int i = 0;
-        while (length > 1) {
-            checksum = checksum + (((checksumInput[i] & 0xff) << 8) | (checksumInput[i + 1] & 0xff));
-
-            if ((checksum & 0xffff0000) > 0) {
-                checksum = checksum & 0xffff;
-                checksum++;
-            }
-            i = i + 2;
-            length = length - 2;
-        }
-        if (length == 1) {
-            checksum = checksum + (checksumInput[i] >> 8);
-            if ((checksum & 0xffff0000) > 0) {
-                checksum = checksum & 0xffff;
-                checksum++;
-            }
-        }
-        int inverseChecksum = ~checksum & 0xffff;
-        return inverseChecksum;
-    }
-
-    /**
-     * Get the input that is needed to calculate the checksum (which is the total header without the two bytes that
-     * include the checksum result).
-     *
-     * @return byte representation of all the checksum input.
-     */
-    public static byte[] getChecksumInput(byte[] packetHeader, int payloadLength) {
-        byte[] totalChecksumInput = new byte[(HEADER_SIZE + 2)];
-        System.arraycopy(packetHeader, 0, totalChecksumInput, 0, (HEADER_SIZE-2));
-        totalChecksumInput[HEADER_SIZE-2] = (byte) ((payloadLength >> 8) & 0xff);
-        totalChecksumInput[HEADER_SIZE-1] = (byte) (payloadLength & 0xff);
-        totalChecksumInput[HEADER_SIZE] = (byte) ((HEADER_SIZE >> 8) & 0xff);
-        totalChecksumInput[HEADER_SIZE+1] = (byte) (HEADER_SIZE & 0xff);
-        return totalChecksumInput;
     }
 
     /**

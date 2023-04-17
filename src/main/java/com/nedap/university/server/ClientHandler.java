@@ -28,7 +28,13 @@ public class ClientHandler {
         boolean connected = true;
         while (connected) {
             DatagramPacket receivedPacket = server.receiveRequest();
-            if (receivedPacket != null) {
+            if (receivedPacket == null) {
+                try {
+                    Thread.sleep(1000);
+                } catch (InterruptedException e) {
+                    throw new RuntimeException(e); // todo
+                }
+            } else {
                 // get the address and port number of the received packet:
                 InetAddress inetAddress = receivedPacket.getAddress();
                 int port = receivedPacket.getPort();

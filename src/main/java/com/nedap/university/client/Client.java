@@ -95,24 +95,34 @@ public class Client implements Runnable {
                     if (requestFlag == PacketProtocol.DOWNLOAD) {
                         File downloadedFile = FileProtocol.bytesToFile(FileProtocol.CLIENT_FILEPATH, fileName, StopAndWaitProtocol.getFileInBytes());
                         System.out.println("Finally, receive HashCode");
-//                            if (DataIntegrityCheck.receiveHashCode(clientSocket) && (DataIntegrityCheck.getFlag() == PacketProtocol.CHECK)) {
-//                                System.out.println("Hashcode is received.");
-//                                int originalHashCode = DataIntegrityCheck.getHashCode();
-//                                int hashCodeOfReceivedFile = downloadedFile.hashCode();
-//                                if (DataIntegrityCheck.areSentAndReceivedFilesTheSame(originalHashCode, hashCodeOfReceivedFile)) {
-//                                    System.out.println("The file is successfully downloaded.");
-//                                } else {
-//                                    downloadedFile.delete();
-//                                    System.out.println("The file that you downloaded is not the same as the original file on the server and is therefore not saved.");
-//                                }
-//                                receivedSeqNr = DataIntegrityCheck.getReceivedSeqNr();
-//                                receivedAckNumber = DataIntegrityCheck.getReceivedAckNr();
-//                                try {
-//                                    Acknowledgement.sendAcknowledgement(0, receivedSeqNr, receivedAckNumber, clientSocket, InetAddress.getByName(PacketProtocol.PI_ADDRESS), PacketProtocol.PI_PORT);
-//                                } catch (UnknownHostException e) {
-//                                    throw new RuntimeException(e); // todo
-//                                }
-//                            }
+
+                        DatagramPacket packetWithChecksum = DataIntegrityCheck.receiveChecksum(clientSocket);
+                        int receivedFlag = PacketProtocol.getFlag(packetWithChecksum.getData());
+                        int receivedChecksum = DataIntegrityCheck.getChecksum(packetWithChecksum);
+                        byte[] receivedFileInBytes = StopAndWaitProtocol.getFileInBytes();
+                        int checksumOfReceivedFile = DataIntegrityCheck.calculateChecksum(receivedFileInBytes);
+                        if (receivedFlag == PacketProtocol.CHECK) {
+                            int lastReceivedSeqNr = PacketProtocol.getSequenceNumber(packetWithChecksum.getData());
+                            int lastReceivedAck = PacketProtocol.getAcknowledgementNumber(packetWithChecksum.getData());
+                            System.out.println("Hashcode is received");
+                            if (receivedChecksum == checksumOfReceivedFile) {
+                                System.out.println("The file is successfully downloaded.");
+                                try {
+                                    Acknowledgement.sendAcknowledgement(0, lastReceivedSeqNr, lastReceivedAck, clientSocket, InetAddress.getByName(PacketProtocol.PI_ADDRESS), PacketProtocol.PI_PORT);
+                                } catch (UnknownHostException e) {
+                                    throw new RuntimeException(e); // todo
+                                }
+                            } else {
+                                downloadedFile.delete();
+                                System.out.println("The file that you downloaded is not the same as the original file on the server and is therefore not saved.");
+                                try {
+                                    Acknowledgement.sendAcknowledgement(PacketProtocol.INCORRECT, lastReceivedSeqNr, lastReceivedAck, clientSocket, InetAddress.getByName(PacketProtocol.PI_ADDRESS), PacketProtocol.PI_PORT);
+                                } catch (UnknownHostException e) {
+                                    throw new RuntimeException(e); // todo
+                                }
+                            }
+                        }
+                        // todo: else?
                     } else {
                         byte[] receivedList = StopAndWaitProtocol.getFileInBytes();
                         String listOfFiles = new String(receivedList);
@@ -132,31 +142,33 @@ public class Client implements Runnable {
                     }
                     System.out.println("Then, send hash code of file");
 
-//                        int receivedAckNumber = StopAndWaitProtocol.getLastReceivedAckNr();
-//                        int receivedSeqNumber = StopAndWaitProtocol.getLastReceivedSeqNr();
-//                        File fileSent = FileProtocol.getFile(FileProtocol.CLIENT_FILEPATH, fileName);
-//                        int hashCode = fileSent.hashCode();
-//                        try {
-//                            DataIntegrityCheck.sendHashCode(hashCode, receivedSeqNumber, receivedAckNumber, clientSocket, InetAddress.getByName(PacketProtocol.PI_ADDRESS), PacketProtocol.PI_PORT);
-//                        } catch (IOException e) {
-//                            e.printStackTrace(); // todo
-//                        }
-//                        if (receiveAcknowledgement(clientSocket)) {
-//                            int flag = PacketProtocol.getFlag(ackPacket);
-//                            if (requestFlag == PacketProtocol.UPLOAD) {
-//                                if (flag == PacketProtocol.ACK) {
-//                                    System.out.println(fileName + " is successfully uploaded to the server.");
-//                                } else {
-//                                    System.out.println("The upload of " + fileName + " was not successful. Please, try again.");
-//                                }
-//                            } else {
-//                                if (flag == PacketProtocol.ACK) {
-//                                    System.out.println("The replacement of " + oldFileName + " by " + newFileName + " is successfully completed.");
-//                                } else {
-//                                    System.out.println("The replacement of " + oldFileName + " by " + newFileName + " was not successful. Please, try again (but be aware that " + oldFileName + " does not exist on the server anymore!)");
-//                                }
-//                            }
-//                        }
+                    int checksumOfTotalFile = DataIntegrityCheck.calculateChecksum(dataOfFileToSend);
+                    receivedSeqNr = StopAndWaitProtocol.getLastReceivedSeqNr();
+                    receivedAckNumber = StopAndWaitProtocol.getLastReceivedAckNr();
+
+                    DatagramPacket checksumToSend = null;
+                    try {
+                        checksumToSend = DataIntegrityCheck.createChecksumPacket(checksumOfTotalFile, receivedSeqNr, receivedAckNumber, InetAddress.getByName(PacketProtocol.PI_ADDRESS), PacketProtocol.PI_PORT);
+                    } catch (UnknownHostException e) {
+                        throw new RuntimeException(e); // todo
+                    }
+                    DatagramPacket ackPacket = Acknowledgement.createAckPacketToReceive();
+                    Acknowledgement.tryToReceiveAck(clientSocket, ackPacket, checksumToSend);
+                    byte[] ackReceived = Acknowledgement.getAcknowledgement();
+                    int flag = PacketProtocol.getFlag(ackReceived);
+                    if (requestFlag == PacketProtocol.UPLOAD) {
+                        if (flag == PacketProtocol.ACK) {
+                            System.out.println(fileName + " is successfully uploaded to the server.");
+                        } else {
+                            System.out.println("The upload of " + fileName + " was not successful. Please, try again.");
+                        }
+                    } else {
+                        if (flag == PacketProtocol.ACK) {
+                            System.out.println("The replacement of " + oldFileName + " by " + newFileName + " is successfully completed.");
+                        } else {
+                            System.out.println("The replacement of " + oldFileName + " by " + newFileName + " was not successful. Please, try again (but be aware that " + oldFileName + " does not exist on the server anymore!)");
+                        }
+                    }
                 } else if (requestFlag == PacketProtocol.CLOSE) {
                     stopClient();
                     break;

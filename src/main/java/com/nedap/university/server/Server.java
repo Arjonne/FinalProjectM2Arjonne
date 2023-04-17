@@ -66,7 +66,6 @@ public class Server {
         try {
             serverSocket.receive(packetToReceive);
         } catch (IOException e) {
-            e.printStackTrace(); //todo
             return null;
         }
         return packetToReceive;
@@ -85,21 +84,26 @@ public class Server {
             StopAndWaitProtocol.receiveFile(serverSocket, totalFileSize);
             File uploadedFile = FileProtocol.bytesToFile(FileProtocol.SERVER_FILEPATH, fileName, StopAndWaitProtocol.getFileInBytes());
             System.out.println("Try to receive hash code");
-//            if (DataIntegrityCheck.receiveHashCode(serverSocket) && (DataIntegrityCheck.getFlag() == PacketProtocol.CHECK)) {
-//                System.out.println("Hashcode is received.");
-//                int originalHashCode = DataIntegrityCheck.getHashCode();
-//                int hashCodeOfReceivedFile = uploadedFile.hashCode();
-//                receivedSeqNr = DataIntegrityCheck.getReceivedSeqNr();
-//                int receivedAckNumber = DataIntegrityCheck.getReceivedAckNr();
-//                if (DataIntegrityCheck.areSentAndReceivedFilesTheSame(originalHashCode, hashCodeOfReceivedFile)) {
-//                    System.out.println("The file is successfully uploaded.");
-//                    Acknowledgement.sendAcknowledgement(0, receivedSeqNr, receivedAckNumber, serverSocket, inetAddress, port);
-//                } else {
-//                    uploadedFile.delete();
-//                    System.out.println("The file that the client wanted to upload is not the same as the original file on the client and is therefore not saved.");
-//                    Acknowledgement.sendAcknowledgement(PacketProtocol.INCORRECT, receivedSeqNr, receivedAckNumber, serverSocket, inetAddress, port);
-//                }
-//            }
+
+            DatagramPacket packetWithChecksum = DataIntegrityCheck.receiveChecksum(serverSocket);
+            int receivedFlag = PacketProtocol.getFlag(packetWithChecksum.getData());
+            int receivedChecksum = DataIntegrityCheck.getChecksum(packetWithChecksum);
+            byte[] receivedFileInBytes = StopAndWaitProtocol.getFileInBytes();
+            int checksumOfReceivedFile = DataIntegrityCheck.calculateChecksum(receivedFileInBytes);
+            if (receivedFlag == PacketProtocol.CHECK) {
+                int lastReceivedSeqNr = PacketProtocol.getSequenceNumber(packetWithChecksum.getData());
+                int lastReceivedAck = PacketProtocol.getAcknowledgementNumber(packetWithChecksum.getData());
+                System.out.println("Hashcode is received");
+                if (receivedChecksum == checksumOfReceivedFile) {
+                    System.out.println("The file is successfully downloaded.");
+                    Acknowledgement.sendAcknowledgement(0, lastReceivedSeqNr, lastReceivedAck, serverSocket, inetAddress, port);
+                } else {
+                    uploadedFile.delete();
+                    System.out.println("The file that you downloaded is not the same as the original file on the server and is therefore not saved.");
+                    Acknowledgement.sendAcknowledgement(PacketProtocol.INCORRECT, lastReceivedSeqNr, lastReceivedAck, serverSocket, inetAddress, port);
+                }
+            }
+            // todo: else?
         } else {
             responseMessage = ("The server already has a file " + fileName + ". Therefore, upload cannot take place.");
             Acknowledgement.sendInitialAcknowledgementWithMessage(PacketProtocol.DOESALREADYEXIST, 0, receivedSeqNr, responseMessage, serverSocket, inetAddress, port);
@@ -123,26 +127,26 @@ public class Server {
             Acknowledgement.receiveAckOnFileSize(0, fileSize, receivedSeqNr, responseMessage, inetAddress, port, serverSocket);
             // get information from this packet:
             byte[] ackReceived = Acknowledgement.getAcknowledgement();
-            int lastSentSeqNr = PacketProtocol.getAcknowledgementNumber(ackReceived);
+            int lastReceivedAckNr = PacketProtocol.getAcknowledgementNumber(ackReceived);
             int lastReceivedSeqNr = PacketProtocol.getSequenceNumber(ackReceived);
             byte[] fileToSendInBytes = FileProtocol.fileToBytes(FileProtocol.SERVER_FILEPATH, fileName);
-            StopAndWaitProtocol.sendFile(fileToSendInBytes, lastSentSeqNr, lastReceivedSeqNr, serverSocket, inetAddress, port);
+            StopAndWaitProtocol.sendFile(fileToSendInBytes, lastReceivedAckNr, lastReceivedSeqNr, serverSocket, inetAddress, port);
             System.out.println("Send hash code");
 
-//                int receivedAckNumber = StopAndWaitProtocol.getLastReceivedAckNr();
-//                int receivedSeqNumber = StopAndWaitProtocol.getLastReceivedSeqNr();
-//                File fileSent = FileProtocol.getFile(FileProtocol.SERVER_FILEPATH, fileName);
-//                int hashCode = fileSent.hashCode();
-//                DataIntegrityCheck.sendHashCode(hashCode, receivedSeqNumber, receivedAckNumber, serverSocket, inetAddress, port);
-//                if (receiveAcknowledgement(serverSocket)) {
-//                    int flag = PacketProtocol.getFlag(ackPacket);
-//                    if (flag == PacketProtocol.ACK) {
-//                        System.out.println(fileName + " is successfully downloaded by the client.");
-//                    } else {
-//                        System.out.println("The download of " + fileName + " was not successful. Wait for new input from the client.");
-//                    }
-//
-//                }
+            int checksumOfTotalFile = DataIntegrityCheck.calculateChecksum(fileToSendInBytes);
+            receivedSeqNr = StopAndWaitProtocol.getLastReceivedSeqNr();
+            lastReceivedAckNr = StopAndWaitProtocol.getLastReceivedAckNr();
+
+            DatagramPacket checksumToSend = DataIntegrityCheck.createChecksumPacket(checksumOfTotalFile, receivedSeqNr, lastReceivedAckNr, inetAddress, port);
+            DatagramPacket ackPacket = Acknowledgement.createAckPacketToReceive();
+            Acknowledgement.tryToReceiveAck(serverSocket, ackPacket, checksumToSend);
+            ackReceived = Acknowledgement.getAcknowledgement();
+            int flag = PacketProtocol.getFlag(ackReceived);
+            if (flag == PacketProtocol.ACK) {
+                System.out.println(fileName + " is successfully downloaded by the client.");
+            } else {
+                System.out.println("The download of " + fileName + " was not successful.");
+            }
         }
     }
 
@@ -190,23 +194,28 @@ public class Server {
             }
             Acknowledgement.sendInitialAcknowledgementWithMessage(0, 0, receivedSeqNr, responseMessage, serverSocket, inetAddress, port);
             StopAndWaitProtocol.receiveFile(serverSocket, totalFileSize);
-            File uploadedFile = FileProtocol.bytesToFile(FileProtocol.SERVER_FILEPATH, newFileName, StopAndWaitProtocol.getFileInBytes());
+            File replacingFile = FileProtocol.bytesToFile(FileProtocol.SERVER_FILEPATH, newFileName, StopAndWaitProtocol.getFileInBytes());
             System.out.println("Try to receive hash code");
-//            if (DataIntegrityCheck.receiveHashCode(serverSocket) && (DataIntegrityCheck.getFlag() == PacketProtocol.CHECK)) {
-//                System.out.println("Hashcode is received.");
-//                int originalHashCode = DataIntegrityCheck.getHashCode();
-//                int hashCodeOfReceivedFile = uploadedFile.hashCode();
-//                receivedSeqNr = DataIntegrityCheck.getReceivedSeqNr();
-//                int receivedAckNumber = DataIntegrityCheck.getReceivedAckNr();
-//                if (DataIntegrityCheck.areSentAndReceivedFilesTheSame(originalHashCode, hashCodeOfReceivedFile)) {
-//                    System.out.println("The file is successfully uploaded.");
-//                    Acknowledgement.sendAcknowledgement(0, receivedSeqNr, receivedAckNumber, serverSocket, inetAddress, port);
-//                } else {
-//                    uploadedFile.delete();
-//                    System.out.println("The file that the client wanted to upload is not the same as the original file on the client and is therefore not saved.");
-//                    Acknowledgement.sendAcknowledgement(PacketProtocol.INCORRECT, receivedSeqNr, receivedAckNumber, serverSocket, inetAddress, port);
-//                }
-//            }
+
+            DatagramPacket packetWithChecksum = DataIntegrityCheck.receiveChecksum(serverSocket);
+            int receivedFlag = PacketProtocol.getFlag(packetWithChecksum.getData());
+            int receivedChecksum = DataIntegrityCheck.getChecksum(packetWithChecksum);
+            byte[] receivedFileInBytes = StopAndWaitProtocol.getFileInBytes();
+            int checksumOfReceivedFile = DataIntegrityCheck.calculateChecksum(receivedFileInBytes);
+            if (receivedFlag == PacketProtocol.CHECK) {
+                int lastReceivedSeqNr = PacketProtocol.getSequenceNumber(packetWithChecksum.getData());
+                int lastReceivedAck = PacketProtocol.getAcknowledgementNumber(packetWithChecksum.getData());
+                System.out.println("Hashcode is received");
+                if (receivedChecksum == checksumOfReceivedFile) {
+                    System.out.println("The file is successfully downloaded.");
+                    Acknowledgement.sendAcknowledgement(0, lastReceivedSeqNr, lastReceivedAck, serverSocket, inetAddress, port);
+                } else {
+                    replacingFile.delete();
+                    System.out.println("The file that you downloaded is not the same as the original file on the server and is therefore not saved.");
+                    Acknowledgement.sendAcknowledgement(PacketProtocol.INCORRECT, lastReceivedSeqNr, lastReceivedAck, serverSocket, inetAddress, port);
+                }
+            }
+            // todo: else?
         } else {
             responseMessage = (oldFileName + " cannot be replaced by the server as it does not exist.");
             Acknowledgement.sendInitialAcknowledgementWithMessage(PacketProtocol.DOESNOTEXIST, 0, receivedSeqNr, responseMessage, serverSocket, inetAddress, port);

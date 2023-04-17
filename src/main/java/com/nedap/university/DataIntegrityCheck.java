@@ -9,9 +9,8 @@ import java.net.InetAddress;
 /**
  * Represents the functions for checking whether the received file is the same as the file that is sent.
  */
-public class DataIntegrityCheck {
-    public final static int HASHCODE_LENGTH = 32;
-    public final static int BITS_IN_BYTE = 8;
+public final class DataIntegrityCheck {
+    public final static int CHECKSUM_LENGTH = 2;
     public static int flag;
     public static int hashCode;
     public static int receivedSeqNr;
@@ -23,14 +22,6 @@ public class DataIntegrityCheck {
 
     public static void setFlag(int flag) {
         DataIntegrityCheck.flag = flag;
-    }
-
-    public static int getHashCode() {
-        return hashCode;
-    }
-
-    public static void setHashCode(int hashCode) {
-        DataIntegrityCheck.hashCode = hashCode;
     }
 
     public static int getReceivedSeqNr() {
@@ -50,6 +41,53 @@ public class DataIntegrityCheck {
     }
 
     /**
+     * Get the input that is needed to calculate the checksum (which is the total header without the two bytes that
+     * include the checksum result).
+     *
+     * @return byte representation of all the checksum input.
+     */
+    public static byte[] getChecksumInput(byte[] packetHeader, int payloadLength) {
+        byte[] totalChecksumInput = new byte[(PacketProtocol.HEADER_SIZE + 2)];
+        System.arraycopy(packetHeader, 0, totalChecksumInput, 0, (PacketProtocol.HEADER_SIZE - 2));
+        totalChecksumInput[PacketProtocol.HEADER_SIZE - 2] = (byte) ((payloadLength >> 8) & 0xff);
+        totalChecksumInput[PacketProtocol.HEADER_SIZE - 1] = (byte) (payloadLength & 0xff);
+        totalChecksumInput[PacketProtocol.HEADER_SIZE] = (byte) ((PacketProtocol.HEADER_SIZE >> 8) & 0xff);
+        totalChecksumInput[PacketProtocol.HEADER_SIZE + 1] = (byte) (PacketProtocol.HEADER_SIZE & 0xff);
+        return totalChecksumInput;
+    }
+
+    /**
+     * Calculate the checksum.
+     *
+     * @param checksumInput is the input for the checksum (header information).
+     * @return the inverse result of the checksum.
+     */
+    public static int calculateChecksum(byte[] checksumInput) {
+        int checksum = 0;
+        int length = checksumInput.length;
+        int i = 0;
+        while (length > 1) {
+            checksum = checksum + (((checksumInput[i] & 0xff) << 8) | (checksumInput[i + 1] & 0xff));
+
+            if ((checksum & 0xffff0000) > 0) {
+                checksum = checksum & 0xffff;
+                checksum++;
+            }
+            i = i + 2;
+            length = length - 2;
+        }
+        if (length == 1) {
+            checksum = checksum + (checksumInput[i] >> 8);
+            if ((checksum & 0xffff0000) > 0) {
+                checksum = checksum & 0xffff;
+                checksum++;
+            }
+        }
+        int inverseChecksum = ~checksum & 0xffff;
+        return inverseChecksum;
+    }
+
+    /**
      * Check if checksum is correct. For this, the checksum that is sent can be compared with the calculated checksum at
      * the receiver side. If the sum of these is equal to two bytes of only ones, the sum is correct (checksum and its
      * inverse should result in only ones).
@@ -60,91 +98,48 @@ public class DataIntegrityCheck {
      */
     public static boolean isChecksumCorrect(byte[] packetWithHeader, int payloadLength) {
         int checksumSent = PacketProtocol.getChecksum(packetWithHeader);
-        byte[] checksumInput = PacketProtocol.getChecksumInput(packetWithHeader, payloadLength);
-        int checksumCalculated = PacketProtocol.calculateChecksum(checksumInput);
+        byte[] checksumInput = getChecksumInput(packetWithHeader, payloadLength);
+        int checksumCalculated = calculateChecksum(checksumInput);
         return checksumSent == checksumCalculated;
     }
 
-//    /**
-//     * Check if file on server and local file are the same by comparing their hash codes.
-//     *
-//     * @param hashCodeOfFileSent     is the hash code of the file that is sent.
-//     * @param hashCodeOfFileReceived is the hash code of the received file.
-//     * @return true if these hash codes are the same, false if not.
-//     */
-//    public static boolean areSentAndReceivedFilesTheSame(int hashCodeOfFileSent, int hashCodeOfFileReceived) {
-//        return hashCodeOfFileSent == hashCodeOfFileReceived;
-//    }
-//
-//    /**
-//     * Try to receive a hashCode.
-//     *
-//     * @return true if the acknowledgement is received, false if not.
-//     */
-//    public static boolean receiveHashCode(DatagramSocket socket) {
-//        byte[] hashCodeInBytes = new byte[DataIntegrityCheck.HASHCODE_LENGTH + PacketProtocol.HEADER_SIZE];
-//        DatagramPacket packetWithHashCode = new DatagramPacket(hashCodeInBytes, hashCodeInBytes.length);
-//        try {
-//            socket.receive(packetWithHashCode);
-////            if (isChecksumCorrect(hashCodeInBytes)) {
-//                int flag = PacketProtocol.getFlag(hashCodeInBytes);
-//                setFlag(flag);
-//                int hashCode = getHashCodeFromPacket(hashCodeInBytes);
-//                setHashCode(hashCode);
-//                int receivedSeqNr = PacketProtocol.getSequenceNumber(hashCodeInBytes);
-//                setReceivedSeqNr(receivedSeqNr);
-//                int receivedAckNr = PacketProtocol.getAcknowledgementNumber(hashCodeInBytes);
-//                setReceivedAckNr(receivedAckNr);
-//                return true;
-////            } else {
-////                return false;
-////            }
-//        } catch (IOException e) {
-//            e.printStackTrace(); // todo
-//            return false;
-//        }
-//    }
-//
-//
-//    /**
-//     * Send hash code packet
-//     * @param hashCode
-//     * @param receivedSeqNumber
-//     * @param receivedAckNumber
-//     * @param socket
-//     * @param address
-//     * @param port
-//     */
-//    public static void sendHashCode(int hashCode, int receivedSeqNumber, int receivedAckNumber, DatagramSocket socket, InetAddress address, int port) {
-//        int sequenceNumber = receivedAckNumber + 1;
-//        int acknowledgementNumber = receivedSeqNumber;
-//        byte[] hashCodeInBytes = getHashCodeInBytes(hashCode);
-//        byte[] hashCodeFullPacket = PacketProtocol.createPacketWithHeader(HASHCODE_LENGTH, sequenceNumber, acknowledgementNumber, PacketProtocol.CHECK, hashCodeInBytes);
-//        DatagramPacket hashCodePacket = new DatagramPacket(hashCodeFullPacket, hashCodeFullPacket.length, address, port);
-//        try {
-//            socket.send(hashCodePacket);
-//        } catch (IOException e) {
-//            e.printStackTrace(); // todo
-//        }
-//    }
-//
-//    public static int getHashCodeFromPacket(byte[] hashCodeInBytes) {
-//        int numberOfBitsToShift = (HASHCODE_LENGTH * BITS_IN_BYTE) - BITS_IN_BYTE;
-//        hashCode = 0;
-//        for (int i = 0; i < HASHCODE_LENGTH; i++) {
-//            hashCode = hashCode | (hashCodeInBytes[i] & 0xff) << numberOfBitsToShift;
-//        }
-//        return hashCode;
-//    }
-//
-//
-//    public static byte[] getHashCodeInBytes(int hashCode) {
-//        byte[] hashCodeInBytes = new byte[HASHCODE_LENGTH];
-//        int numberOfBitsToShift = (HASHCODE_LENGTH * BITS_IN_BYTE) - BITS_IN_BYTE;
-//        for (int i = 0; i < HASHCODE_LENGTH; i++) {
-//            hashCodeInBytes[i] = (byte) (hashCode >> numberOfBitsToShift);
-//            numberOfBitsToShift = numberOfBitsToShift - BITS_IN_BYTE;
-//        }
-//        return hashCodeInBytes;
-//    }
+    public static int getChecksum(DatagramPacket packetWithChecksum) {
+        byte[] checksumPacketData = packetWithChecksum.getData();
+        byte[] checksum = new byte[CHECKSUM_LENGTH];
+        System.arraycopy(checksumPacketData, PacketProtocol.HEADER_SIZE, checksum, 0, CHECKSUM_LENGTH);
+        return (((checksum[0] & 0xff) << 8) | (checksum[1] & 0xff));
+    }
+
+
+    public static DatagramPacket receiveChecksum(DatagramSocket socket) {
+        boolean received = false;
+        byte[] receivedChecksumInBytes = new byte[DataIntegrityCheck.CHECKSUM_LENGTH + PacketProtocol.HEADER_SIZE];
+        DatagramPacket packetWithChecksum = new DatagramPacket(receivedChecksumInBytes, receivedChecksumInBytes.length);
+        while (!received) {
+            try {
+                socket.receive(packetWithChecksum);
+                received = true;
+            } catch (IOException e) {
+                e.printStackTrace(); // todo
+                return null;
+            }
+        }
+        return packetWithChecksum;
+    }
+
+    public static byte[] checksumOfTotalFileInBytes(int checksumOfTotalFile) {
+        byte[] checksumInBytes = new byte[CHECKSUM_LENGTH];
+        checksumInBytes[0] = (byte) (checksumOfTotalFile >> 8);
+        checksumInBytes[1] = (byte) (checksumOfTotalFile & 0xff);
+        return checksumInBytes;
+    }
+
+    public static DatagramPacket createChecksumPacket(int checksumOfTotalFile, int receivedSeqNumber, int receivedAckNumber, InetAddress address, int port) {
+        int sequenceNumber = receivedAckNumber + 1;
+        int acknowledgementNumber = receivedSeqNumber;
+        byte[] checksumInBytes = checksumOfTotalFileInBytes(checksumOfTotalFile);
+        byte[] checksumFullPacket = PacketProtocol.createPacketWithHeader(CHECKSUM_LENGTH, sequenceNumber, acknowledgementNumber, PacketProtocol.CHECK, checksumInBytes);
+        DatagramPacket checksumToSend = new DatagramPacket(checksumFullPacket, checksumFullPacket.length, address, port);
+        return checksumToSend;
+    }
 }
