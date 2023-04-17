@@ -1,5 +1,6 @@
 package com.nedap.university;
 
+import java.net.InetAddress;
 import java.util.Random;
 
 /**
@@ -39,7 +40,7 @@ public final class PacketProtocol {
      * @param flag             is the flag that is being set.
      * @return the header as byte array (which is the same format as the datagram packet itself).
      */
-    public static byte[] createHeader(int totalFileSize, int sequenceNumber, int acknowledgementNumber, int flag) {
+    public static byte[] createHeader(int totalFileSize, int sequenceNumber, int acknowledgementNumber, int flag, int payloadLength) {
         byte[] header = new byte[HEADER_SIZE];
         // four bytes for size of the total file without header:
         header[0] = (byte) (totalFileSize >> 24);
@@ -61,7 +62,7 @@ public final class PacketProtocol {
         header[13] = (byte) (flag & 0xff);
 
         // create a new byte array with all information that is needed for the checksum:
-        byte[] checksumInput = getChecksumInput(header);
+        byte[] checksumInput = getChecksumInput(header, payloadLength);
         // two bytes for checksum:
         header[14] = (byte) (calculateChecksum(checksumInput) >> 8);
         header[15] = (byte) (calculateChecksum(checksumInput) & 0xff);
@@ -78,7 +79,7 @@ public final class PacketProtocol {
      */
     public static byte[] createPacketWithHeader(int totalFileSize, int sequenceNumber, int ackNumber, int flag, byte[] fileData) {
         int totalPacketSize = HEADER_SIZE + fileData.length;
-        byte[] header = createHeader(totalFileSize, sequenceNumber, ackNumber, flag);
+        byte[] header = createHeader(totalFileSize, sequenceNumber, ackNumber, flag, fileData.length);
         byte[] totalPacket = new byte[totalPacketSize];
         // copy header into total packet:
         for (int i = 0; i < HEADER_SIZE; i++) {
@@ -117,8 +118,9 @@ public final class PacketProtocol {
         int length = checksumInput.length;
         int i = 0;
         while (length > 1) {
-            checksum = checksum + ((checksumInput[i] >> 8) | (checksumInput[i + 1] & 0xff));
-            if ((checksum & 0xffff0000) > 0) { //todo checken hoe dit precies zit
+            checksum = checksum + (((checksumInput[i] & 0xff) << 8) | (checksumInput[i + 1] & 0xff));
+
+            if ((checksum & 0xffff0000) > 0) {
                 checksum = checksum & 0xffff;
                 checksum++;
             }
@@ -132,7 +134,7 @@ public final class PacketProtocol {
                 checksum++;
             }
         }
-        int inverseChecksum = ~checksum;
+        int inverseChecksum = ~checksum & 0xffff;
         return inverseChecksum;
     }
 
@@ -140,13 +142,16 @@ public final class PacketProtocol {
      * Get the input that is needed to calculate the checksum (which is the total header without the two bytes that
      * include the checksum result).
      *
-     * @param packetWithHeader is the byte representation of the header.
-     * @return byte representation of the checksum input.
+     * @return byte representation of all the checksum input.
      */
-    public static byte[] getChecksumInput(byte[] packetWithHeader) {
-        byte[] checksumInput = new byte[(HEADER_SIZE - 2)];
-        System.arraycopy(packetWithHeader, 0, checksumInput, 0, (HEADER_SIZE - 2));
-        return checksumInput;
+    public static byte[] getChecksumInput(byte[] packetHeader, int payloadLength) {
+        byte[] totalChecksumInput = new byte[(HEADER_SIZE + 2)];
+        System.arraycopy(packetHeader, 0, totalChecksumInput, 0, (HEADER_SIZE-2));
+        totalChecksumInput[HEADER_SIZE-2] = (byte) ((payloadLength >> 8) & 0xff);
+        totalChecksumInput[HEADER_SIZE-1] = (byte) (payloadLength & 0xff);
+        totalChecksumInput[HEADER_SIZE] = (byte) ((HEADER_SIZE >> 8) & 0xff);
+        totalChecksumInput[HEADER_SIZE+1] = (byte) (HEADER_SIZE & 0xff);
+        return totalChecksumInput;
     }
 
     /**

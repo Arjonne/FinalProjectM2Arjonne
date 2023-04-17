@@ -127,8 +127,7 @@ public class StopAndWaitProtocol {
                 int receivedAckNumber = PacketProtocol.getAcknowledgementNumber(dataOfReceivedPacket);
                 System.out.println("Packet received with flag " + PacketProtocol.getFlag(dataOfReceivedPacket) + " ackNr " + receivedAckNumber + " and seq nr: " + receivedSequenceNumber + ".");
                 // only send acknowledgement if checksum is correct:
-//                if (DataIntegrityCheck.isChecksumCorrect(dataOfReceivedPacket)) {
-                if (true) { //todo terug aanpassen als probleem checksum is gevonden.
+                if (DataIntegrityCheck.isChecksumCorrect(dataOfReceivedPacket, (fragmentSize - PacketProtocol.HEADER_SIZE))) {
                     System.out.println("Checksum was correct.");
                     Acknowledgement.sendAcknowledgement(0, receivedSequenceNumber, receivedAckNumber, socket, inetAddress, port);
                     // check if you did not receive the same packet twice:

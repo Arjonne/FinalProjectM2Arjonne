@@ -58,92 +58,93 @@ public class DataIntegrityCheck {
      *                         is available. Besides, the checksum can be calculated over the header of the packet.
      * @return true if these are the same, false if not
      */
-    public static boolean isChecksumCorrect(byte[] packetWithHeader) {
+    public static boolean isChecksumCorrect(byte[] packetWithHeader, int payloadLength) {
         int checksumSent = PacketProtocol.getChecksum(packetWithHeader);
-        byte[] checksumInput = PacketProtocol.getChecksumInput(packetWithHeader);
+        byte[] checksumInput = PacketProtocol.getChecksumInput(packetWithHeader, payloadLength);
         int checksumCalculated = PacketProtocol.calculateChecksum(checksumInput);
-        return checksumSent + checksumCalculated == 0xffff;
+        return checksumSent == checksumCalculated;
     }
 
-    /**
-     * Check if file on server and local file are the same by comparing their hash codes.
-     *
-     * @param hashCodeOfFileSent     is the hash code of the file that is sent.
-     * @param hashCodeOfFileReceived is the hash code of the received file.
-     * @return true if these hash codes are the same, false if not.
-     */
-    public static boolean areSentAndReceivedFilesTheSame(int hashCodeOfFileSent, int hashCodeOfFileReceived) {
-        return hashCodeOfFileSent == hashCodeOfFileReceived;
-    }
-
-    /**
-     * Try to receive a hashCode.
-     *
-     * @return true if the acknowledgement is received, false if not.
-     */
-    public static boolean receiveHashCode(DatagramSocket socket) {
-        byte[] hashCodeInBytes = new byte[DataIntegrityCheck.HASHCODE_LENGTH + PacketProtocol.HEADER_SIZE];
-        DatagramPacket packetWithHashCode = new DatagramPacket(hashCodeInBytes, hashCodeInBytes.length);
-        try {
-            socket.receive(packetWithHashCode);
-//            if (isChecksumCorrect(hashCodeInBytes)) {
-                int flag = PacketProtocol.getFlag(hashCodeInBytes);
-                setFlag(flag);
-                int hashCode = getHashCodeFromPacket(hashCodeInBytes);
-                setHashCode(hashCode);
-                int receivedSeqNr = PacketProtocol.getSequenceNumber(hashCodeInBytes);
-                setReceivedSeqNr(receivedSeqNr);
-                int receivedAckNr = PacketProtocol.getAcknowledgementNumber(hashCodeInBytes);
-                setReceivedAckNr(receivedAckNr);
-                return true;
-//            } else {
-//                return false;
-//            }
-        } catch (IOException e) {
-            e.printStackTrace(); // todo
-            return false;
-        }
-    }
-
-    /**
-     * Send hash code packet
-     * @param hashCode
-     * @param receivedSeqNumber
-     * @param receivedAckNumber
-     * @param socket
-     * @param address
-     * @param port
-     */
-    public static void sendHashCode(int hashCode, int receivedSeqNumber, int receivedAckNumber, DatagramSocket socket, InetAddress address, int port) {
-        int sequenceNumber = receivedAckNumber + 1;
-        int acknowledgementNumber = receivedSeqNumber;
-        byte[] hashCodeInBytes = getHashCodeInBytes(hashCode);
-        byte[] hashCodeFullPacket = PacketProtocol.createPacketWithHeader(HASHCODE_LENGTH, sequenceNumber, acknowledgementNumber, PacketProtocol.CHECK, hashCodeInBytes);
-        DatagramPacket hashCodePacket = new DatagramPacket(hashCodeFullPacket, hashCodeFullPacket.length, address, port);
-        try {
-            socket.send(hashCodePacket);
-        } catch (IOException e) {
-            e.printStackTrace(); // todo
-        }
-    }
-
-    public static int getHashCodeFromPacket(byte[] hashCodeInBytes) {
-        int numberOfBitsToShift = (HASHCODE_LENGTH * BITS_IN_BYTE) - BITS_IN_BYTE;
-        hashCode = 0;
-        for (int i = 0; i < HASHCODE_LENGTH; i++) {
-            hashCode = hashCode | (hashCodeInBytes[i] & 0xff) << numberOfBitsToShift;
-        }
-        return hashCode;
-    }
-
-
-    public static byte[] getHashCodeInBytes(int hashCode) {
-        byte[] hashCodeInBytes = new byte[HASHCODE_LENGTH];
-        int numberOfBitsToShift = (HASHCODE_LENGTH * BITS_IN_BYTE) - BITS_IN_BYTE;
-        for (int i = 0; i < HASHCODE_LENGTH; i++) {
-            hashCodeInBytes[i] = (byte) (hashCode >> numberOfBitsToShift);
-            numberOfBitsToShift = numberOfBitsToShift - BITS_IN_BYTE;
-        }
-        return hashCodeInBytes;
-    }
+//    /**
+//     * Check if file on server and local file are the same by comparing their hash codes.
+//     *
+//     * @param hashCodeOfFileSent     is the hash code of the file that is sent.
+//     * @param hashCodeOfFileReceived is the hash code of the received file.
+//     * @return true if these hash codes are the same, false if not.
+//     */
+//    public static boolean areSentAndReceivedFilesTheSame(int hashCodeOfFileSent, int hashCodeOfFileReceived) {
+//        return hashCodeOfFileSent == hashCodeOfFileReceived;
+//    }
+//
+//    /**
+//     * Try to receive a hashCode.
+//     *
+//     * @return true if the acknowledgement is received, false if not.
+//     */
+//    public static boolean receiveHashCode(DatagramSocket socket) {
+//        byte[] hashCodeInBytes = new byte[DataIntegrityCheck.HASHCODE_LENGTH + PacketProtocol.HEADER_SIZE];
+//        DatagramPacket packetWithHashCode = new DatagramPacket(hashCodeInBytes, hashCodeInBytes.length);
+//        try {
+//            socket.receive(packetWithHashCode);
+////            if (isChecksumCorrect(hashCodeInBytes)) {
+//                int flag = PacketProtocol.getFlag(hashCodeInBytes);
+//                setFlag(flag);
+//                int hashCode = getHashCodeFromPacket(hashCodeInBytes);
+//                setHashCode(hashCode);
+//                int receivedSeqNr = PacketProtocol.getSequenceNumber(hashCodeInBytes);
+//                setReceivedSeqNr(receivedSeqNr);
+//                int receivedAckNr = PacketProtocol.getAcknowledgementNumber(hashCodeInBytes);
+//                setReceivedAckNr(receivedAckNr);
+//                return true;
+////            } else {
+////                return false;
+////            }
+//        } catch (IOException e) {
+//            e.printStackTrace(); // todo
+//            return false;
+//        }
+//    }
+//
+//
+//    /**
+//     * Send hash code packet
+//     * @param hashCode
+//     * @param receivedSeqNumber
+//     * @param receivedAckNumber
+//     * @param socket
+//     * @param address
+//     * @param port
+//     */
+//    public static void sendHashCode(int hashCode, int receivedSeqNumber, int receivedAckNumber, DatagramSocket socket, InetAddress address, int port) {
+//        int sequenceNumber = receivedAckNumber + 1;
+//        int acknowledgementNumber = receivedSeqNumber;
+//        byte[] hashCodeInBytes = getHashCodeInBytes(hashCode);
+//        byte[] hashCodeFullPacket = PacketProtocol.createPacketWithHeader(HASHCODE_LENGTH, sequenceNumber, acknowledgementNumber, PacketProtocol.CHECK, hashCodeInBytes);
+//        DatagramPacket hashCodePacket = new DatagramPacket(hashCodeFullPacket, hashCodeFullPacket.length, address, port);
+//        try {
+//            socket.send(hashCodePacket);
+//        } catch (IOException e) {
+//            e.printStackTrace(); // todo
+//        }
+//    }
+//
+//    public static int getHashCodeFromPacket(byte[] hashCodeInBytes) {
+//        int numberOfBitsToShift = (HASHCODE_LENGTH * BITS_IN_BYTE) - BITS_IN_BYTE;
+//        hashCode = 0;
+//        for (int i = 0; i < HASHCODE_LENGTH; i++) {
+//            hashCode = hashCode | (hashCodeInBytes[i] & 0xff) << numberOfBitsToShift;
+//        }
+//        return hashCode;
+//    }
+//
+//
+//    public static byte[] getHashCodeInBytes(int hashCode) {
+//        byte[] hashCodeInBytes = new byte[HASHCODE_LENGTH];
+//        int numberOfBitsToShift = (HASHCODE_LENGTH * BITS_IN_BYTE) - BITS_IN_BYTE;
+//        for (int i = 0; i < HASHCODE_LENGTH; i++) {
+//            hashCodeInBytes[i] = (byte) (hashCode >> numberOfBitsToShift);
+//            numberOfBitsToShift = numberOfBitsToShift - BITS_IN_BYTE;
+//        }
+//        return hashCodeInBytes;
+//    }
 }

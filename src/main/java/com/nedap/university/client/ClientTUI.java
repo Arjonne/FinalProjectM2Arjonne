@@ -65,10 +65,10 @@ public class ClientTUI {
                     if (fileName == null) {
                         System.out.println("File name should be added in the download request. See OPTIONS for the correct format.");
                     } else {
-                        if (!FileProtocol.checkIfFileExists(fileName, FileProtocol.createFilePath(FileProtocol.CLIENT_FILEPATH))) {
-                            client.sendRequest(fileName, PacketProtocol.DOWNLOAD, 0);
-                        } else {
+                        if (FileProtocol.checkIfFileExists(fileName, FileProtocol.createFilePath(FileProtocol.CLIENT_FILEPATH))) {
                             System.out.println("The file " + fileName + " already exists in your local folder " + FileProtocol.CLIENT_FILEPATH + ", first remove this file if you want to download it again.");
+                        } else {
+                            client.sendRequest(fileName, PacketProtocol.DOWNLOAD, 0);
                         }
                     }
                     break;

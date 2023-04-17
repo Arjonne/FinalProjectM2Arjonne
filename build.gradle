@@ -10,6 +10,7 @@
 buildscript {
     repositories {
         mavenCentral()
+        jcenter()
     }
 }
 
@@ -20,7 +21,8 @@ plugins {
 }
 
 dependencies {
-    testImplementation 'org.junit.jupiter:junit-jupiter:5.7.1'
+    testImplementation 'org.junit.jupiter:junit-jupiter:5.9.2'
+    testImplementation 'junit:junit:4.13.2'
 }
 
 test {
@@ -76,6 +78,10 @@ task deploy {
 
 run {
     standardInput = System.in
+}
+
+repositories {
+    mavenCentral()
 }
 
 deploy.dependsOn jar

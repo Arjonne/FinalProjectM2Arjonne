@@ -227,7 +227,7 @@ public class Client implements Runnable {
      */
     public void sendListOrCloseRequest(int flag) {
         int sequenceNumber = PacketProtocol.generateRandomSequenceNumber();
-        byte[] request = PacketProtocol.createHeader(0, sequenceNumber, 0, flag);
+        byte[] request = PacketProtocol.createHeader(0, sequenceNumber, 0, flag, 0);
         try {
             DatagramPacket requestPacket = new DatagramPacket(request, request.length, InetAddress.getByName(PacketProtocol.PI_ADDRESS), PacketProtocol.PI_PORT);
             setRequestPacket(requestPacket);

@@ -41,7 +41,7 @@ public class Acknowledgement {
     public static void sendAcknowledgement(int optionalExtraFlag, int receivedSeqNumber, int receivedAckNumber, DatagramSocket socket, InetAddress address, int port) {
         int sequenceNumber = receivedAckNumber + 1;
         int acknowledgementNumber = receivedSeqNumber;
-        byte[] acknowledgement = PacketProtocol.createHeader(0, sequenceNumber, acknowledgementNumber, (PacketProtocol.ACK + optionalExtraFlag));
+        byte[] acknowledgement = PacketProtocol.createHeader(0, sequenceNumber, acknowledgementNumber, (PacketProtocol.ACK + optionalExtraFlag), 0);
         DatagramPacket ackPacket = new DatagramPacket(acknowledgement, acknowledgement.length, address, port);
         try {
             socket.send(ackPacket);
