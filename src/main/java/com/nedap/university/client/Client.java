@@ -17,15 +17,9 @@ public class Client implements Runnable {
     private DatagramSocket clientSocket;
     private boolean quit;
     private boolean tryToReceive;
-    int totalFileSize;
     String fileName;
     String oldFileName;
     String newFileName;
-    int requestFlag;
-    int receivedFlag;
-    int receivedSeqNr;
-    int lastSentSeqNr;
-    byte[] ackPacket;
     DatagramPacket requestPacket;
 
     /**
@@ -77,23 +71,30 @@ public class Client implements Runnable {
                     throw new RuntimeException(e); // todo
                 }
             }
-            if (receiveAckWithMessage()) {
-                if (getReceivedFlag() == PacketProtocol.ACK) {
-                    if (requestFlag == PacketProtocol.DOWNLOAD || requestFlag == PacketProtocol.LIST) {
-                        System.out.println("first try to receive file size OR list size. If received:");
-                        System.out.println("respond with ACK");
-                        int receivedSeqNr = getReceivedSeqNr();
-                        int receivedAckNumber = getLastSentSeqNr();
-                        try {
-                            respondWithAcknowledgement(receivedSeqNr, receivedAckNumber, clientSocket, InetAddress.getByName(PacketProtocol.PI_ADDRESS), PacketProtocol.PI_PORT);
-                        } catch (UnknownHostException e) {
-                            throw new RuntimeException(e); // todo
-                        }
-                        System.out.println("then, start SW protocol to receive file");
-                        StopAndWaitProtocol.receiveFile(clientSocket, getTotalFileSize());
-                        if (requestFlag == PacketProtocol.DOWNLOAD) {
-                            File downloadedFile = FileProtocol.bytesToFile(FileProtocol.CLIENT_FILEPATH, fileName, StopAndWaitProtocol.getFileInBytes());
-                            System.out.println("Finally, receive HashCode");
+            // send request and try to receive ACK (if not in time, resend packet):
+            Acknowledgement.receiveAckWithMessage(clientSocket, getRequestPacket());
+            byte[] acknowledgement = Acknowledgement.getAcknowledgement();
+            String messageFromServer = new String(acknowledgement, PacketProtocol.HEADER_SIZE, (acknowledgement.length - PacketProtocol.HEADER_SIZE));
+            System.out.println(messageFromServer.trim());
+            if (PacketProtocol.getFlag(acknowledgement) == PacketProtocol.ACK) {
+                int totalFileSize = PacketProtocol.getFileSizeInPacket(acknowledgement);
+                int receivedSeqNr = PacketProtocol.getSequenceNumber(acknowledgement);
+                int receivedAckNumber = PacketProtocol.getAcknowledgementNumber(acknowledgement);
+                int requestFlag = PacketProtocol.getFlag(getRequestPacket().getData());
+                String fileName = getFileName();
+                String oldFileName = getOldFileName();
+                String newFileName = getNewFileName();
+
+                if (requestFlag == PacketProtocol.DOWNLOAD || requestFlag == PacketProtocol.LIST) {
+                    try {
+                        Acknowledgement.sendAcknowledgement(0, receivedSeqNr, receivedAckNumber, clientSocket, InetAddress.getByName(PacketProtocol.PI_ADDRESS), PacketProtocol.PI_PORT);
+                    } catch (UnknownHostException e) {
+                        throw new RuntimeException(e); // todo
+                    }
+                    StopAndWaitProtocol.receiveFile(clientSocket, totalFileSize);
+                    if (requestFlag == PacketProtocol.DOWNLOAD) {
+                        File downloadedFile = FileProtocol.bytesToFile(FileProtocol.CLIENT_FILEPATH, fileName, StopAndWaitProtocol.getFileInBytes());
+                        System.out.println("Finally, receive HashCode");
 //                            if (DataIntegrityCheck.receiveHashCode(clientSocket) && (DataIntegrityCheck.getFlag() == PacketProtocol.CHECK)) {
 //                                System.out.println("Hashcode is received.");
 //                                int originalHashCode = DataIntegrityCheck.getHashCode();
@@ -107,29 +108,29 @@ public class Client implements Runnable {
 //                                receivedSeqNr = DataIntegrityCheck.getReceivedSeqNr();
 //                                receivedAckNumber = DataIntegrityCheck.getReceivedAckNr();
 //                                try {
-//                                    respondWithAcknowledgement(receivedSeqNr, receivedAckNumber, clientSocket, InetAddress.getByName(PacketProtocol.PI_ADDRESS), PacketProtocol.PI_PORT);
+//                                    Acknowledgement.sendAcknowledgement(0, receivedSeqNr, receivedAckNumber, clientSocket, InetAddress.getByName(PacketProtocol.PI_ADDRESS), PacketProtocol.PI_PORT);
 //                                } catch (UnknownHostException e) {
 //                                    throw new RuntimeException(e); // todo
 //                                }
 //                            }
-                            System.out.println("Give the command you want to execute next:");
-                        } else {
-                            byte[] receivedList = StopAndWaitProtocol.getFileInBytes();
-                            String listOfFiles = new String(receivedList);
-                            System.out.println(listOfFiles);
-                            System.out.println("Give the command you want to execute next:");
-                        }
-                    } else if (requestFlag == PacketProtocol.UPLOAD || requestFlag == PacketProtocol.REPLACE) {
-                        int lastSentSeqNr = getLastSentSeqNr();
-                        int lastReceivedSeqNr = getReceivedSeqNr();
-                        byte[] dataOfFileToSend = FileProtocol.fileToBytes(FileProtocol.CLIENT_FILEPATH, fileName);
-                        System.out.println("Try to send file.");
-                        try {
-                            StopAndWaitProtocol.sendFile(dataOfFileToSend, lastSentSeqNr, lastReceivedSeqNr, clientSocket, InetAddress.getByName(PacketProtocol.PI_ADDRESS), PacketProtocol.PI_PORT);
-                        } catch (UnknownHostException e) {
-                            throw new RuntimeException(e); // todo
-                        }
-                        System.out.println("Then, send hash code of file");
+                    } else {
+                        byte[] receivedList = StopAndWaitProtocol.getFileInBytes();
+                        String listOfFiles = new String(receivedList);
+                        System.out.println(listOfFiles);
+                    }
+                } else if (requestFlag == PacketProtocol.UPLOAD || requestFlag == PacketProtocol.REPLACE) {
+                    byte[] dataOfFileToSend;
+                    if (requestFlag == PacketProtocol.UPLOAD) {
+                        dataOfFileToSend = FileProtocol.fileToBytes(FileProtocol.CLIENT_FILEPATH, fileName);
+                    } else {
+                        dataOfFileToSend = FileProtocol.fileToBytes(FileProtocol.CLIENT_FILEPATH, newFileName);
+                    }
+                    try {
+                        StopAndWaitProtocol.sendFile(dataOfFileToSend, receivedAckNumber, receivedSeqNr, clientSocket, InetAddress.getByName(PacketProtocol.PI_ADDRESS), PacketProtocol.PI_PORT);
+                    } catch (UnknownHostException e) {
+                        throw new RuntimeException(e); // todo
+                    }
+                    System.out.println("Then, send hash code of file");
 
 //                        int receivedAckNumber = StopAndWaitProtocol.getLastReceivedAckNr();
 //                        int receivedSeqNumber = StopAndWaitProtocol.getLastReceivedSeqNr();
@@ -155,22 +156,17 @@ public class Client implements Runnable {
 //                                    System.out.println("The replacement of " + oldFileName + " by " + newFileName + " was not successful. Please, try again (but be aware that " + oldFileName + " does not exist on the server anymore!)");
 //                                }
 //                            }
-                            System.out.println("Give the command you want to execute next:");
 //                        }
-                    } else if (requestFlag == PacketProtocol.CLOSE) {
-                        stopClient();
-                    }
-                } else if ((receivedFlag == (PacketProtocol.ACK + PacketProtocol.DOESNOTEXIST)) || (receivedFlag == (PacketProtocol.ACK + PacketProtocol.DOESALREADYEXIST))) {
-                    System.out.println("Give the command you want to execute next:");
+                } else if (requestFlag == PacketProtocol.CLOSE) {
+                    stopClient();
+                    break;
                 }
-            } else {
-                // todo kijk naar voorbeeld in SWPROTOCOL voor timer.
-                System.out.println("Send request again: packet with ACK was not received so server might not have received the request.");
-                resendRequest(getRequestPacket());
             }
+            System.out.println("Give the command you want to execute next:");
             tryToReceive = false;
         }
     }
+
 
     /**
      * Set the boolean sendToServer to true when user has given input via TUI that needs to be communicated to the
@@ -179,6 +175,8 @@ public class Client implements Runnable {
     public void activateTryToReceive() {
         tryToReceive = true;
     }
+
+    // METHODS USED IN SWITCH IN CLIENT-TUI:
 
     /**
      * Send request to server.
@@ -194,14 +192,11 @@ public class Client implements Runnable {
         try {
             DatagramPacket requestPacket = new DatagramPacket(request, request.length, InetAddress.getByName(PacketProtocol.PI_ADDRESS), PacketProtocol.PI_PORT);
             setRequestPacket(requestPacket);
-            clientSocket.send(requestPacket);
+            setFileName(fileNameFromRequest);
+            activateTryToReceive();
         } catch (IOException e) {
             e.printStackTrace(); //todo
         }
-        setLastSentSeqNr(sequenceNumber);
-        requestFlag = flag;
-        fileName = fileNameFromRequest;
-        activateTryToReceive();
     }
 
     /**
@@ -218,15 +213,13 @@ public class Client implements Runnable {
         byte[] request = PacketProtocol.createPacketWithHeader(fileSize, sequenceNumber, 0, PacketProtocol.REPLACE, fileData);
         try {
             DatagramPacket requestPacket = new DatagramPacket(request, request.length, InetAddress.getByName(PacketProtocol.PI_ADDRESS), PacketProtocol.PI_PORT);
-            clientSocket.send(requestPacket);
+            setRequestPacket(requestPacket);
+            setOldFileName(oldFileNameFromRequest);
+            setNewFileName(newFileNameFromRequest);
+            activateTryToReceive();
         } catch (IOException e) {
             e.printStackTrace(); //todo
         }
-        setLastSentSeqNr(sequenceNumber);
-        requestFlag = PacketProtocol.REPLACE;
-        oldFileName = oldFileNameFromRequest;
-        newFileName = newFileNameFromRequest;
-        activateTryToReceive();
     }
 
     /**
@@ -237,14 +230,14 @@ public class Client implements Runnable {
         byte[] request = PacketProtocol.createHeader(0, sequenceNumber, 0, flag);
         try {
             DatagramPacket requestPacket = new DatagramPacket(request, request.length, InetAddress.getByName(PacketProtocol.PI_ADDRESS), PacketProtocol.PI_PORT);
-            clientSocket.send(requestPacket);
+            setRequestPacket(requestPacket);
+            activateTryToReceive();
         } catch (IOException e) {
             e.printStackTrace(); //todo
         }
-        setLastSentSeqNr(sequenceNumber);
-        requestFlag = flag;
-        activateTryToReceive();
     }
+
+    // GETTERS AND SETTERS:
 
     /**
      * Set the request DatagramPacket to the last request.
@@ -265,169 +258,27 @@ public class Client implements Runnable {
         return requestPacket;
     }
 
-    /**
-     * Send request DatagramPacket again in case acknowledgement was not received in time from the server (which might
-     * indicate that request never arrived as well).
-     *
-     * @param requestPacket is the DatagramPacket that includes the request that was last sent.
-     */
-    public void resendRequest(DatagramPacket requestPacket) {
-        try {
-            clientSocket.send(requestPacket);
-        } catch (IOException e) {
-            e.printStackTrace(); //todo boolean van maken true/false? blijven proberen...
-        }
+    public String getFileName() {
+        return fileName;
     }
 
-    /**
-     * Set the variable totalFileSize to the actual total file size of the file to be transmitted.
-     *
-     * @param totalFileSize is the total size of the file to be transmitted.
-     */
-    public void setTotalFileSize(int totalFileSize) {
-        this.totalFileSize = totalFileSize;
+    public void setFileName(String fileName) {
+        this.fileName = fileName;
     }
 
-    /**
-     * Get the total file size of the file to be transmitted.
-     *
-     * @return the total file size.
-     */
-    public int getTotalFileSize() {
-        return totalFileSize;
+    public String getOldFileName() {
+        return oldFileName;
     }
 
-    /**
-     * Set the receivedFlag to the value of the flag(s) that are received in the acknowledgement.
-     *
-     * @param receivedFlag is the value of the received flag(s).
-     */
-    public void setReceivedFlag(int receivedFlag) {
-        this.receivedFlag = receivedFlag;
+    public void setOldFileName(String oldFileName) {
+        this.oldFileName = oldFileName;
     }
 
-    /**
-     * Get the flag(s) that is/are set in the acknowledgement packet that is received.
-     *
-     * @return the flag(s) that is/are set.
-     */
-    public int getReceivedFlag() {
-        return receivedFlag;
+    public String getNewFileName() {
+        return newFileName;
     }
 
-    /**
-     * Get the last received sequence number in order to respond properly with an acknowledgement.
-     *
-     * @return the last received sequence number.
-     */
-    public int getReceivedSeqNr() {
-        return receivedSeqNr;
-    }
-
-    /**
-     * Set the last received sequence number in order to respond properly with an acknowledgement.
-     *
-     * @param receivedSeqNr is the received sequence number.
-     */
-    public void setReceivedSeqNr(int receivedSeqNr) {
-        this.receivedSeqNr = receivedSeqNr;
-    }
-
-    /**
-     * Get the last sequence number sent in order to properly increase this number in the next packet to send.
-     *
-     * @return the last sequence number sent.
-     */
-    public int getLastSentSeqNr() {
-        return lastSentSeqNr;
-    }
-
-    /**
-     * Set the last sequence number sent in order to properly increase this number in the next packet to send.
-     *
-     * @param lastSentSeqNr is the sequence number sent.
-     */
-    public void setLastSentSeqNr(int lastSentSeqNr) {
-        this.lastSentSeqNr = lastSentSeqNr;
-    }
-
-    /**
-     * Check if client has received an acknowledgement from the server (as response to the request).
-     *
-     * @return true if acknowledgement is received, false if not.
-     */
-    public boolean receiveAckWithMessage() {
-        byte[] responsePacket = new byte[256];
-        DatagramPacket packetToReceive = new DatagramPacket(responsePacket, responsePacket.length);
-        try {
-            clientSocket.receive(packetToReceive);
-        } catch (IOException e) {
-            e.printStackTrace(); // todo
-            return false;
-        }
-        int receivedFlag = PacketProtocol.getFlag(packetToReceive.getData());
-        setReceivedFlag(receivedFlag);
-        if (receivedFlag == (PacketProtocol.ACK)) {
-            String messageFromServer = new String(packetToReceive.getData(), PacketProtocol.HEADER_SIZE, (packetToReceive.getLength() - PacketProtocol.HEADER_SIZE));
-            // get information from this acknowledgement and store it to be able to reuse it in the sending/receiving protocol.
-            int totalFileSize = PacketProtocol.getFileSizeInPacket(packetToReceive.getData());
-            setTotalFileSize(totalFileSize);
-            int receivedSeqNr = PacketProtocol.getSequenceNumber(packetToReceive.getData());
-            setReceivedSeqNr(receivedSeqNr);
-            System.out.println(messageFromServer);
-            return true;
-        } else if ((getReceivedFlag() == (PacketProtocol.DOESALREADYEXIST + PacketProtocol.ACK)) || getReceivedFlag() == (PacketProtocol.DOESNOTEXIST + PacketProtocol.ACK)) {
-            String messageFromServer = new String(packetToReceive.getData(), PacketProtocol.HEADER_SIZE, (packetToReceive.getLength() - PacketProtocol.HEADER_SIZE));
-            System.out.println(messageFromServer);
-            return true;
-        } else {
-            return false;
-        }
-    }
-
-    /**
-     * Try to receive an acknowledgement.
-     *
-     * @return true if the acknowledgement is received, false if not.
-     */
-    public boolean receiveAcknowledgement(DatagramSocket socket) {
-        byte[] ackPacket = new byte[PacketProtocol.HEADER_SIZE];
-        DatagramPacket ackToReceive = new DatagramPacket(ackPacket, ackPacket.length);
-        try {
-            socket.receive(ackToReceive);
-            setAckPacket(ackPacket);
-            return true;
-        } catch (IOException e) {
-            return false;
-        }
-    }
-
-    public void setAckPacket(byte[] ackPacket) {
-        this.ackPacket = ackPacket;
-    }
-
-    public byte[] getAckPacket(){
-        return ackPacket;
-    }
-
-    /**
-     * Respond with an acknowledgement to the received file size.
-     *
-     * @param receivedSeqNumber is the sequence number in the received packet.
-     * @param receivedAckNumber is the acknowledgement number in the received packet.
-     * @param socket            is the socket via which the client and server are connected.
-     * @param address           is the address of the server.
-     * @param port              is the port of the server.
-     */
-    public void respondWithAcknowledgement(int receivedSeqNumber, int receivedAckNumber, DatagramSocket socket, InetAddress address, int port) {
-        int sequenceNumber = receivedAckNumber + 1;
-        int acknowledgementNumber = receivedSeqNumber;
-        byte[] acknowledgement = PacketProtocol.createHeader(0, sequenceNumber, acknowledgementNumber, PacketProtocol.ACK);
-        DatagramPacket ackPacket = new DatagramPacket(acknowledgement, acknowledgement.length, address, port);
-        try {
-            socket.send(ackPacket);
-        } catch (IOException e) {
-            // todo
-        }
+    public void setNewFileName(String newFileName) {
+        this.newFileName = newFileName;
     }
 }
