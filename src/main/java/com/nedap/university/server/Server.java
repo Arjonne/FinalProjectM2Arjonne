@@ -129,7 +129,7 @@ public class Server {
                 byte[] fileToSendInBytes = FileProtocol.fileToBytes(FileProtocol.SERVER_FILEPATH, fileName);
                 // send the byte representation of the file to the client:
                 if (fileToSendInBytes != null) {
-                    StopAndWaitProtocol.sendFile(fileToSendInBytes, lastReceivedAckNr, lastReceivedSeqNr, serverSocket, inetAddress, port);
+                    StopAndWaitProtocol.sendFile(fileToSendInBytes, lastReceivedSeqNr, lastReceivedAckNr, serverSocket, inetAddress, port);
                     // calculate the checksum of the original file and send it to the server:
                     int checksumOfTotalFile = DataIntegrityCheck.calculateChecksum(fileToSendInBytes);
                     lastReceivedSeqNr = StopAndWaitProtocol.getLastReceivedSeqNr();
@@ -220,7 +220,7 @@ public class Server {
             byte[] ackReceived = Acknowledgement.getAcknowledgement();
             int lastReceivedAckNr = PacketProtocol.getAcknowledgementNumber(ackReceived);
             lastReceivedSeqNr = PacketProtocol.getSequenceNumber(ackReceived);
-            StopAndWaitProtocol.sendFile(listOfFilesInBytes, lastReceivedAckNr, lastReceivedSeqNr, serverSocket, inetAddress, port);
+            StopAndWaitProtocol.sendFile(listOfFilesInBytes, lastReceivedSeqNr, lastReceivedAckNr, serverSocket, inetAddress, port);
         }
     }
 

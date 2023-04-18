@@ -100,7 +100,7 @@ public class Client implements Runnable {
                         // send the byte representation of the file to the server:
                         if (dataOfFileToSend != null) {
                             try {
-                                StopAndWaitProtocol.sendFile(dataOfFileToSend, lastReceivedAckNr, lastReceivedSeqNr, clientSocket, InetAddress.getByName(PacketProtocol.PI_ADDRESS), PacketProtocol.PI_PORT);
+                                StopAndWaitProtocol.sendFile(dataOfFileToSend, lastReceivedSeqNr, lastReceivedAckNr, clientSocket, InetAddress.getByName(PacketProtocol.PI_ADDRESS), PacketProtocol.PI_PORT);
                             } catch (UnknownHostException e) {
                                 System.out.println("Check the destination address input (server address), as the destination could not be found.");
                             }
@@ -147,7 +147,7 @@ public class Client implements Runnable {
                         // send the byte representation of the file to the server:
                         if (dataOfFileToSend != null) {
                             try {
-                                StopAndWaitProtocol.sendFile(dataOfFileToSend, lastReceivedAckNr, lastReceivedSeqNr, clientSocket, InetAddress.getByName(PacketProtocol.PI_ADDRESS), PacketProtocol.PI_PORT);
+                                StopAndWaitProtocol.sendFile(dataOfFileToSend, lastReceivedSeqNr, lastReceivedAckNr, clientSocket, InetAddress.getByName(PacketProtocol.PI_ADDRESS), PacketProtocol.PI_PORT);
                             } catch (UnknownHostException e) {
                                 System.out.println("Check the destination address input (server address), as the destination could not be found.");
                             }

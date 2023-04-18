@@ -1,20 +1,22 @@
 package com.nedap.university;
 
-import java.net.InetAddress;
 import java.util.Random;
 
 /**
  * Represents the protocol for building packets for the transmission between client and server.
  */
 public final class PacketProtocol {
-    // address and port of Raspberry Pi:
+//          --- ADDRESS AND PORT INFORMATION ---
     public static final String PI_ADDRESS = "localhost";
 //    public static final String PI_ADDRESS = "172.16.1.1";
     public static final int PI_PORT = 9090;
-    // as MTU is 1500, use a maximal packet size of 1500:
+
+//          --- SIZES ---
     public static final int MAX_PACKET_SIZE = 1500;
+    public static final int PACKET_WITH_MESSAGE_SIZE = 256;
     public static final int HEADER_SIZE = 16;
-    // flags:
+
+//          --- FLAGS ---
     public static final int ACK = 1;
     public static final int UPLOAD = 2;
     public static final int DOWNLOAD = 4;
@@ -34,15 +36,16 @@ public final class PacketProtocol {
      * Create a header for the datagram packet to be able to use sequence numbers and acknowledgements for checking
      * packets, flags for the correct statement and checksum to check for correct data transmission.
      *
-     * @param totalFileSize is the total size of the actual file (without header) that needs to be transmitted.
-     * @param sequenceNumber   is the sequence number of the packet, which starts at a random number and goes up with 1
-     *                         every round trip.
-     * @param flag             is the flag that is being set.
-     * @return the header as byte array (which is the same format as the datagram packet itself).
+     * @param totalFileSize         is the total size of the actual file (without header) that needs to be transmitted.
+     * @param sequenceNumber        is the sequence number of the packet.
+     * @param acknowledgementNumber is acknowledgement number of the packet (= sequence number of received packet).
+     * @param flag                  is the flag that this packet carries.
+     * @param payloadLength         is the length of the data this packet carries.
+     * @return the header of the packet.
      */
     public static byte[] createHeader(int totalFileSize, int sequenceNumber, int acknowledgementNumber, int flag, int payloadLength) {
         byte[] header = new byte[HEADER_SIZE];
-        // four bytes for size of the total file without header:
+        // four bytes for size of the total file (without header):
         header[0] = (byte) (totalFileSize >> 24);
         header[1] = (byte) ((totalFileSize >> 16) & 0xff);
         header[2] = (byte) ((totalFileSize >> 8) & 0xff);
@@ -60,7 +63,6 @@ public final class PacketProtocol {
         // two bytes for the flag(s):
         header[12] = (byte) (flag >> 8); // room for 3 more flags if necessary
         header[13] = (byte) (flag & 0xff);
-
         // create a new byte array with all information that is needed for the checksum:
         byte[] checksumInput = DataIntegrityCheck.getChecksumInput(header, payloadLength);
         // two bytes for checksum:
@@ -72,29 +74,27 @@ public final class PacketProtocol {
     /**
      * Create a new byte array in which the header and actual data to be sent are combined.
      *
-     * @param sequenceNumber is the sequence number (which is needed for the header).
-     * @param flag           is (/are) the flag(s) that need to be set in the header.
-     * @param fileData       is the data of the actual file to be transmitted.
-     * @return the byte array of the total packet (combination of header and data).
+     * @param totalFileSize  is the size of the total file that needs to be transmitted.
+     * @param sequenceNumber is the sequence number of the packet.
+     * @param ackNumber      is the acknowledgement number of the packet.
+     * @param flag           is the flag that this packet carries.
+     * @param fileData       is the byte representation of the actual data this packet carries.
+     * @return the total packet with header.
      */
     public static byte[] createPacketWithHeader(int totalFileSize, int sequenceNumber, int ackNumber, int flag, byte[] fileData) {
         int totalPacketSize = HEADER_SIZE + fileData.length;
         byte[] header = createHeader(totalFileSize, sequenceNumber, ackNumber, flag, fileData.length);
         byte[] totalPacket = new byte[totalPacketSize];
         // copy header into total packet:
-        for (int i = 0; i < HEADER_SIZE; i++) {
-            totalPacket[i] = header[i];
-        }
+        System.arraycopy(header, 0, totalPacket, 0, HEADER_SIZE);
         // copy data of file into total packet:
-        for (int i = HEADER_SIZE; i < (totalPacketSize); i++) {
-            totalPacket[i] = fileData[i - HEADER_SIZE];
-        }
+        System.arraycopy(fileData, 0, totalPacket, HEADER_SIZE, (totalPacketSize - HEADER_SIZE));
         return totalPacket;
     }
 
     /**
-     * Generate random sequence number as every transmission starts with a random, unique sequence number and counts up
-     * from that point.
+     * Generate random sequence number as every sequence of transmissions starts with a random, unique sequence number
+     * and counts up from that point.
      *
      * @return the sequence number.
      */
@@ -103,9 +103,10 @@ public final class PacketProtocol {
         // upperbound is the maximum number that can be represented in four bytes (number of bytes available for this
         // sequence number in the header).
         int upperbound = 0xfffffff;
-        int randomInt = random.nextInt(upperbound);
-        return randomInt;
+        return random.nextInt(upperbound);
     }
+
+//          --- GETTERS ---
 
     /**
      * Get the information on total file size from the header.
@@ -141,14 +142,14 @@ public final class PacketProtocol {
      * Get the information on the flags that are set from the header.
      *
      * @param packetWithHeader is the packet that includes the header.
-     * @return the flags that are set.
+     * @return the flag(s) that is/are set.
      */
     public static int getFlag(byte[] packetWithHeader) {
         return (((packetWithHeader[12] & 0xff) << 8) | (packetWithHeader[13] & 0xff));
     }
 
     /**
-     * Get the inverse checksum that is calculated by the sender from the header.
+     * Get the checksum that is calculated by the sender from the header.
      *
      * @param packetWithHeader is the packet that includes the header.
      * @return the inverse checksum as calculated by the sender.

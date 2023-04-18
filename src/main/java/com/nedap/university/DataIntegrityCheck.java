@@ -11,40 +11,14 @@ import java.net.InetAddress;
  */
 public final class DataIntegrityCheck {
     public final static int CHECKSUM_LENGTH = 2;
-    public static int flag;
-    public static int hashCode;
-    public static int receivedSeqNr;
-    public static int receivedAckNr;
-
-    public static int getFlag() {
-        return flag;
-    }
-
-    public static void setFlag(int flag) {
-        DataIntegrityCheck.flag = flag;
-    }
-
-    public static int getReceivedSeqNr() {
-        return receivedSeqNr;
-    }
-
-    public static void setReceivedSeqNr(int receivedSeqNr) {
-        DataIntegrityCheck.receivedSeqNr = receivedSeqNr;
-    }
-
-    public static int getReceivedAckNr() {
-        return receivedAckNr;
-    }
-
-    public static void setReceivedAckNr(int receivedAckNr) {
-        DataIntegrityCheck.receivedAckNr = receivedAckNr;
-    }
 
     /**
      * Get the input that is needed to calculate the checksum (which is the total header without the two bytes that
      * include the checksum result).
      *
-     * @return byte representation of all the checksum input.
+     * @param packetHeader  is the header of the packet of interest.
+     * @param payloadLength is the total length of the data that is being transmitted in the packet.
+     * @return the byte representation of all the checksum input.
      */
     public static byte[] getChecksumInput(byte[] packetHeader, int payloadLength) {
         byte[] totalChecksumInput = new byte[(PacketProtocol.HEADER_SIZE + 2)];
@@ -59,7 +33,7 @@ public final class DataIntegrityCheck {
     /**
      * Calculate the checksum.
      *
-     * @param checksumInput is the input for the checksum (header information).
+     * @param checksumInput is the input for the checksum.
      * @return the inverse result of the checksum.
      */
     public static int calculateChecksum(byte[] checksumInput) {
@@ -83,18 +57,16 @@ public final class DataIntegrityCheck {
                 checksum++;
             }
         }
-        int inverseChecksum = ~checksum & 0xffff;
-        return inverseChecksum;
+        return (~checksum & 0xffff);
     }
 
     /**
      * Check if checksum is correct. For this, the checksum that is sent can be compared with the calculated checksum at
-     * the receiver side. If the sum of these is equal to two bytes of only ones, the sum is correct (checksum and its
-     * inverse should result in only ones).
+     * the receiver side.
      *
-     * @param packetWithHeader is the total packet in which the inverse of the checksum (as calculated by the sender)
-     *                         is available. Besides, the checksum can be calculated over the header of the packet.
-     * @return true if these are the same, false if not
+     * @param packetWithHeader is the total packet, including header, of interest.
+     * @param payloadLength    is the total length of the data that is being transmitted in the packet.
+     * @return true if the checksum is the same, false if not.
      */
     public static boolean isChecksumCorrect(byte[] packetWithHeader, int payloadLength) {
         int checksumSent = PacketProtocol.getChecksum(packetWithHeader);
@@ -103,6 +75,12 @@ public final class DataIntegrityCheck {
         return checksumSent == checksumCalculated;
     }
 
+    /**
+     * Get the checksum of the total file which is sent in a separate packet.
+     *
+     * @param packetWithChecksum is the packet that includes the checksum.
+     * @return the checksum that is sent.
+     */
     public static int getChecksum(DatagramPacket packetWithChecksum) {
         byte[] checksumPacketData = packetWithChecksum.getData();
         byte[] checksum = new byte[CHECKSUM_LENGTH];
@@ -110,7 +88,12 @@ public final class DataIntegrityCheck {
         return (((checksum[0] & 0xff) << 8) | (checksum[1] & 0xff));
     }
 
-
+    /**
+     * Try to receive the packet that includes the checksum of the total file.
+     *
+     * @param socket is the socket via which the client and server are connected.
+     * @return the packet that carries the checksum.
+     */
     public static DatagramPacket receiveChecksum(DatagramSocket socket) {
         boolean received = false;
         byte[] receivedChecksumInBytes = new byte[DataIntegrityCheck.CHECKSUM_LENGTH + PacketProtocol.HEADER_SIZE];
@@ -120,13 +103,19 @@ public final class DataIntegrityCheck {
                 socket.receive(packetWithChecksum);
                 received = true;
             } catch (IOException e) {
-                e.printStackTrace(); // todo
+                System.out.println("No packet could be received.");
                 return null;
             }
         }
         return packetWithChecksum;
     }
 
+    /**
+     * Get the byte representation of the checksum.
+     *
+     * @param checksumOfTotalFile is the checksum of the total file.
+     * @return the byte representation of the checksum.
+     */
     public static byte[] checksumOfTotalFileInBytes(int checksumOfTotalFile) {
         byte[] checksumInBytes = new byte[CHECKSUM_LENGTH];
         checksumInBytes[0] = (byte) (checksumOfTotalFile >> 8);
@@ -134,12 +123,74 @@ public final class DataIntegrityCheck {
         return checksumInBytes;
     }
 
-    public static DatagramPacket createChecksumPacket(int checksumOfTotalFile, int receivedSeqNumber, int receivedAckNumber, InetAddress address, int port) {
-        int sequenceNumber = receivedAckNumber + 1;
-        int acknowledgementNumber = receivedSeqNumber;
+    /**
+     * Create a datagram packet that includes the checksum of the total file
+     *
+     * @param checksumOfTotalFile   is the checksum of the total file.
+     * @param lastReceivedSeqNumber is the last received sequence number.
+     * @param lastReceivedAckNumber is the last received acknowledgement number.
+     * @param address               is the address to which the packet needs to be sent.
+     * @param port                  is the port to which the packet needs to be sent.
+     * @return the packet that includes the checksum to send.
+     */
+    public static DatagramPacket createChecksumPacket(int checksumOfTotalFile, int lastReceivedSeqNumber, int lastReceivedAckNumber, InetAddress address, int port) {
+        int sequenceNumber = lastReceivedAckNumber + 1;
+        int acknowledgementNumber = lastReceivedSeqNumber;
         byte[] checksumInBytes = checksumOfTotalFileInBytes(checksumOfTotalFile);
         byte[] checksumFullPacket = PacketProtocol.createPacketWithHeader(CHECKSUM_LENGTH, sequenceNumber, acknowledgementNumber, PacketProtocol.CHECK, checksumInBytes);
-        DatagramPacket checksumToSend = new DatagramPacket(checksumFullPacket, checksumFullPacket.length, address, port);
-        return checksumToSend;
+        return new DatagramPacket(checksumFullPacket, checksumFullPacket.length, address, port);
+    }
+
+    /**
+     * Check if the received and actual checksum of the total file are the same.
+     *
+     * @param receivedChecksum       is the checksum that is received from the source.
+     * @param checksumOfReceivedFile is the checksum that is calculated over the received file.
+     * @return true if the two checksums are the same, false if not.
+     */
+    public static boolean areChecksumOfTwoFilesTheSame(int receivedChecksum, int checksumOfReceivedFile) {
+        return receivedChecksum == checksumOfReceivedFile;
+    }
+
+
+    /**
+     * Receive the checksum of the original file, calculate the checksum of the received file, compare the results and
+     * send an acknowledgement to the source.
+     *
+     * @param socket is the socket via which the client and server are connected.
+     * @param inetAddress is the address to which the acknowledgement needs to be sent.
+     * @param port is the port to which the acknowledgement needs to be sent.
+     * @param receivedFile is the file that is received.
+     * @return true if the checksum is correct, false if not.
+     */
+    public static boolean receiveAndPerformTotalChecksum(DatagramSocket socket, InetAddress inetAddress, int port, File receivedFile) {
+        // receive the checksum of the original file from the client:
+        DatagramPacket packetWithChecksum = DataIntegrityCheck.receiveChecksum(socket);
+        if (packetWithChecksum != null) {
+            int receivedFlag = PacketProtocol.getFlag(packetWithChecksum.getData());
+            // if you indeed received a packet with the CHECK flag, the checksum check can be performed:
+            if (receivedFlag == PacketProtocol.CHECK) {
+                int lastReceivedSeqNr = PacketProtocol.getSequenceNumber(packetWithChecksum.getData());
+                int lastReceivedAckNr = PacketProtocol.getAcknowledgementNumber(packetWithChecksum.getData());
+                int receivedChecksum = DataIntegrityCheck.getChecksum(packetWithChecksum);
+                // calculate the checksum of the received file:
+                byte[] receivedFileInBytes = StopAndWaitProtocol.getFileInBytes();
+                int checksumOfReceivedFile = DataIntegrityCheck.calculateChecksum(receivedFileInBytes);
+                if (DataIntegrityCheck.areChecksumOfTwoFilesTheSame(receivedChecksum, checksumOfReceivedFile)) {
+                    // if the two checksums are the same, send an acknowledgement
+                    Acknowledgement.sendAcknowledgement(0, lastReceivedSeqNr, lastReceivedAckNr, socket, inetAddress, port);
+                    return true;
+                } else {
+                    // if the two checksums are not the same, a mistake has occurred during transmission. The
+                    // downloaded file will be removed (as it is not the same as the original one) and an
+                    // INCORRECT flag will be sent to the server.
+                    if (receivedFile != null && receivedFile.delete()) {
+                        Acknowledgement.sendAcknowledgement(PacketProtocol.INCORRECT, lastReceivedSeqNr, lastReceivedAckNr, socket, inetAddress, port);
+                        return false;
+                    }
+                }
+            }
+        }
+        return false;
     }
 }

@@ -20,8 +20,7 @@ public final class FileProtocol {
      * @return the actual file.
      */
     public static File getFile(String filePath, String fileName) {
-        File file = new File(filePath + fileName);
-        return file;
+        return new File(filePath + fileName);
     }
 
     /**
@@ -31,15 +30,15 @@ public final class FileProtocol {
      * @return the actual file path in which files can be found.
      */
     public static File createFilePath(String filePathString) {
-        File filePath = new File(filePathString);
-        return filePath;
+        return new File(filePathString);
     }
 
     /**
-     * Create a byte array (which is the input for a Datagram Packet) from the file that needs to be sent.
+     * Create the byte representation of a file.
      *
-     * @param fileName is the name of the file that needs to be sent.
-     * @return the byte representation of the file in an array.
+     * @param filePath is the path where the file of interest is stored.
+     * @param fileName is the name of the file of interest.
+     * @return the byte representation of the file.
      */
     public static byte[] fileToBytes(String filePath, String fileName) {
         File file = getFile(filePath, fileName);
@@ -60,9 +59,10 @@ public final class FileProtocol {
     /**
      * Create a file from the byte array that is sent.
      *
-     * @param fileName is the name of the transmitted file.
-     * @param fileData is the data of the file in bytes.
-     * @return the complete file.
+     * @param filePathDestination is the file path where the file needs to be stored.
+     * @param fileName            is the name of the transmitted file.
+     * @param fileData            is the data of the file in bytes.
+     * @return the actual file.
      */
     public static File bytesToFile(String filePathDestination, String fileName, byte[] fileData) {
         File file = new File(filePathDestination + fileName);
@@ -83,40 +83,48 @@ public final class FileProtocol {
     /**
      * Get the file size of the file to be transmitted.
      *
-     * @param fileName is the name of the file to be transmitted.
-     * @return the size of the file.
+     * @param filePath is the path where the file of interest is stored.
+     * @param fileName is the name of the file of interest.
+     * @return the size of the file of interest.
      */
     public static int getFileSize(String filePath, String fileName) {
         byte[] fileToSendInBytes = fileToBytes(filePath, fileName);
-        int fileSize = fileToSendInBytes.length;
-        return fileSize;
+        if (fileToSendInBytes != null) {
+            return fileToSendInBytes.length;
+        } else {
+            return -1;
+        }
     }
 
     /**
-     * Check if there are any files stored on the server.
+     * Check if there are any files stored in the folder of interest.
      *
-     * @param filePath is the path with folder in which the files should be stored.
+     * @param filePath is the path with folder in which files should be stored.
      * @return true if any files are stored, false if not.
      */
     public static boolean areFilesStoredOnServer(File filePath) {
         File[] listOfFiles = filePath.listFiles();
-        return listOfFiles.length != 0;
+        return listOfFiles != null;
     }
 
     /**
      * Create a list of all available files on the server.
      *
      * @param filePath is the path with folder in which the files are stored.
-     * @return the list of filenames.
+     * @return the list of filenames, or null if no files are stored.
      */
     public static String createListOfFileNames(File filePath) {
         File[] listOfFiles = filePath.listFiles();
-        String listedFiles = "The following files are stored on the server: \n";
-        for (File file : listOfFiles) {
-            String fileName = file.getName();
-            listedFiles = listedFiles + fileName + "\n";
+        String listedFiles = "\nThe following files are stored on the server: \n";
+        if (listOfFiles != null) {
+            for (File file : listOfFiles) {
+                String fileName = file.getName();
+                listedFiles = listedFiles + fileName + "\n";
+            }
+            return listedFiles;
+        } else {
+            return null;
         }
-        return listedFiles;
     }
 
     /**
@@ -129,10 +137,12 @@ public final class FileProtocol {
     public static boolean checkIfFileExists(String fileNameToCheck, File filePath) {
         File[] listOfFiles = filePath.listFiles();
         if (areFilesStoredOnServer(filePath)) {
-            for (File file : listOfFiles) {
-                String fileName = file.getName();
-                if (fileName.equals(fileNameToCheck)) {
-                    return true;
+            if (listOfFiles != null) {
+                for (File file : listOfFiles) {
+                    String fileName = file.getName();
+                    if (fileName.equals(fileNameToCheck)) {
+                        return true;
+                    }
                 }
             }
         }
