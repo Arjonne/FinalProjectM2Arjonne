@@ -115,8 +115,8 @@ public final class FileProtocol {
      */
     public static String createListOfFileNames(File filePath) {
         File[] listOfFiles = filePath.listFiles();
+        if (areFilesStoredOnServer(filePath)) {
         String listedFiles = "\nThe following files are stored on the server: \n";
-        if (listOfFiles != null) {
             for (File file : listOfFiles) {
                 String fileName = file.getName();
                 listedFiles = listedFiles + fileName + "\n";
@@ -137,7 +137,6 @@ public final class FileProtocol {
     public static boolean checkIfFileExists(String fileNameToCheck, File filePath) {
         File[] listOfFiles = filePath.listFiles();
         if (areFilesStoredOnServer(filePath)) {
-            if (listOfFiles != null) {
                 for (File file : listOfFiles) {
                     String fileName = file.getName();
                     if (fileName.equals(fileNameToCheck)) {
@@ -145,7 +144,6 @@ public final class FileProtocol {
                     }
                 }
             }
-        }
         return false;
     }
 }

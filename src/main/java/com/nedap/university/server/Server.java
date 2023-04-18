@@ -245,10 +245,12 @@ public class Server {
      * @return true if the file existed and could be removed, false if not.
      */
     public boolean isFileRemoved(String fileName) {
+        if (FileProtocol.checkIfFileExists(fileName, filePath)) {
         File[] listOfFiles = filePath.listFiles();
-        if (listOfFiles != null) {
             for (File file : listOfFiles) {
-                return file.getName().equals(fileName) && file.delete();
+                if (file.getName().equals(fileName)) {
+                    return file.delete();
+                }
             }
         }
         return false;

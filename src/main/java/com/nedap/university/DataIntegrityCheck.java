@@ -191,6 +191,7 @@ public final class DataIntegrityCheck {
                 }
             }
         }
+        System.out.println("checksum was probably not received in time.");
         return false;
     }
 }
