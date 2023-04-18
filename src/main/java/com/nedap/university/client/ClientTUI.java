@@ -9,8 +9,6 @@ import java.util.Scanner;
  * Represents the textual user interface of the client for interaction with the server.
  */
 public class ClientTUI {
-    public boolean isCommandCompleted;
-
     /**
      * Creates the clientTUI.
      */
@@ -26,7 +24,7 @@ public class ClientTUI {
     }
 
     /**
-     * Start the textual user interface. Ask for input and respond correctly to that input.
+     * Start the textual user interface. Ask and wait for input by the user and let the client respond correctly to that input.
      */
     public void start() {
         Client client = new Client(this);
@@ -36,7 +34,6 @@ public class ClientTUI {
                     "Give the command you want to execute:");
         }
         boolean close = false;
-        isCommandCompleted = true;
         while (!close) {
             Scanner scanner = new Scanner(System.in);
             String input = scanner.nextLine();
@@ -54,19 +51,23 @@ public class ClientTUI {
             switch (command) {
                 case "UPLOAD":
                     if (fileName == null) {
-                        System.out.println("File name should be added in the upload request. See OPTIONS for the correct format.");
+                        System.out.println("File name should be added in the upload request. See OPTIONS for the correct format. \n" +
+                                "Give the command you want to execute next:");
                     } else if (!FileProtocol.checkIfFileExists(fileName, FileProtocol.createFilePath(FileProtocol.CLIENT_FILEPATH))) {
-                        System.out.println("The file " + fileName + " does not exist in your local folder " + FileProtocol.CLIENT_FILEPATH + ", and can therefore not be uploaded to the server.");
+                        System.out.println("The file " + fileName + " does not exist in your local folder " + FileProtocol.CLIENT_FILEPATH + ", and can therefore not be uploaded to the server. \n" +
+                                "Give the command you want to execute next:");
                     } else {
                         client.sendRequest(fileName, PacketProtocol.UPLOAD, FileProtocol.getFileSize(FileProtocol.CLIENT_FILEPATH, fileName));
                     }
                     break;
                 case "DOWNLOAD":
                     if (fileName == null) {
-                        System.out.println("File name should be added in the download request. See OPTIONS for the correct format.");
+                        System.out.println("File name should be added in the download request. See OPTIONS for the correct format. \n" +
+                                "Give the command you want to execute next:");
                     } else {
                         if (FileProtocol.checkIfFileExists(fileName, FileProtocol.createFilePath(FileProtocol.CLIENT_FILEPATH))) {
-                            System.out.println("The file " + fileName + " already exists in your local folder " + FileProtocol.CLIENT_FILEPATH + ", first remove this file if you want to download it again.");
+                            System.out.println("The file " + fileName + " already exists in your local folder " + FileProtocol.CLIENT_FILEPATH + ", you can therefore not download this file again. \n" +
+                                    "Give the command you want to execute next:");
                         } else {
                             client.sendRequest(fileName, PacketProtocol.DOWNLOAD, 0);
                         }
@@ -74,16 +75,19 @@ public class ClientTUI {
                     break;
                 case "REMOVE":
                     if (fileName == null) {
-                        System.out.println("File name should be added in the remove request. See OPTIONS for the correct format.");
+                        System.out.println("File name should be added in the remove request. See OPTIONS for the correct format. \n" +
+                                "Give the command you want to execute next:");
                     } else {
                         client.sendRequest(fileName, PacketProtocol.REMOVE, 0);
                     }
                     break;
                 case "REPLACE":
                     if (oldFileName == null || newFileName == null) {
-                        System.out.println("File name(s) should be added in the replace request. See OPTIONS for the correct format.");
+                        System.out.println("Two file names should be added in the replace request. See OPTIONS for the correct format. \n" +
+                                "Give the command you want to execute next:");
                     } else if (!FileProtocol.checkIfFileExists(newFileName, FileProtocol.createFilePath(FileProtocol.CLIENT_FILEPATH))) {
-                        System.out.println("The file " + newFileName + " does not exist in your local folder " + FileProtocol.CLIENT_FILEPATH + ", and can therefore not be used to replace " + oldFileName + ".");
+                        System.out.println("The file " + newFileName + " does not exist in your local folder " + FileProtocol.CLIENT_FILEPATH + ", and can therefore not replace " + oldFileName + ". \n" +
+                                "Give the command you want to execute next:");
                     } else {
                         client.sendReplaceRequest(oldFileName, newFileName, FileProtocol.getFileSize(FileProtocol.CLIENT_FILEPATH, newFileName));
                     }
@@ -108,7 +112,7 @@ public class ClientTUI {
     }
 
     /**
-     * Show the options of the commands that can be used in the TUI.
+     * Show the options of the commands that can be used in this TUI.
      */
     public void showOptions() {
         System.out.println("   Commands:\n" +
