@@ -69,7 +69,7 @@ public class Client implements Runnable {
                 try {
                     Thread.sleep(1000);
                 } catch (InterruptedException e) {
-                    System.out.println("Not able to sleep for a second due to interruption.");
+                    System.out.println("Not able to sleep for one second due to interruption.");
                 }
             }
             // send request to the server and try to receive an ACK (if ACK not received in time, resend packet):
@@ -90,113 +90,102 @@ public class Client implements Runnable {
                 String fileName = getFileName();
                 String oldFileName = getOldFileName();
                 String newFileName = getNewFileName();
+                // create variable that can be used in multiple switch cases:
+                byte[] dataOfFileToSend;
                 // execute the steps that are needed per command:
-                if (requestFlag == PacketProtocol.UPLOAD || requestFlag == PacketProtocol.REPLACE) {
-                    byte[] dataOfFileToSend;
-                    // create a byte representation from the (new) file that needs to be uploaded to the server:
-                    if (requestFlag == PacketProtocol.UPLOAD) {
+                switch (requestFlag) {
+                    case PacketProtocol.UPLOAD:
+                        // create a byte representation from the (new) file that needs to be uploaded to the server:
                         dataOfFileToSend = FileProtocol.fileToBytes(FileProtocol.CLIENT_FILEPATH, fileName);
-                    } else {
-                        dataOfFileToSend = FileProtocol.fileToBytes(FileProtocol.CLIENT_FILEPATH, newFileName);
-                    }
-                    // send the byte representation of the file to the server:
-                    if (dataOfFileToSend != null) {
-                        try {
-                            StopAndWaitProtocol.sendFile(dataOfFileToSend, lastReceivedAckNr, lastReceivedSeqNr, clientSocket, InetAddress.getByName(PacketProtocol.PI_ADDRESS), PacketProtocol.PI_PORT);
-                        } catch (UnknownHostException e) {
-                            System.out.println("Check the destination address input (server address), as the destination could not be found.");
-                        }
-                        // calculate the checksum of the original file and send it to the server:
-                        int checksumOfTotalFile = DataIntegrityCheck.calculateChecksum(dataOfFileToSend);
-                        lastReceivedSeqNr = StopAndWaitProtocol.getLastReceivedSeqNr();
-                        lastReceivedAckNr = StopAndWaitProtocol.getLastReceivedAckNr();
-                        // create packet with checksum of total file in it, send it to the server and try to receive an ACK:
-                        DatagramPacket checksumToSend = null;
-                        try {
-                            checksumToSend = DataIntegrityCheck.createChecksumPacket(checksumOfTotalFile, lastReceivedSeqNr, lastReceivedAckNr, InetAddress.getByName(PacketProtocol.PI_ADDRESS), PacketProtocol.PI_PORT);
-                        } catch (UnknownHostException e) {
-                            System.out.println("Check the destination address input (server address), as the destination could not be found.");
-                        }
-                        Acknowledgement.sendChecksumAndReceiveAck(clientSocket, checksumToSend);
-                        // check if the file is correctly received by the server:
-                        byte[] ackReceived = Acknowledgement.getAcknowledgement();
-                        int flag = PacketProtocol.getFlag(ackReceived);
-                        if (requestFlag == PacketProtocol.UPLOAD) {
-                            if (flag == PacketProtocol.ACK) {
+                        // send the byte representation of the file to the server:
+                        if (dataOfFileToSend != null) {
+                            try {
+                                StopAndWaitProtocol.sendFile(dataOfFileToSend, lastReceivedAckNr, lastReceivedSeqNr, clientSocket, InetAddress.getByName(PacketProtocol.PI_ADDRESS), PacketProtocol.PI_PORT);
+                            } catch (UnknownHostException e) {
+                                System.out.println("Check the destination address input (server address), as the destination could not be found.");
+                            }
+                            // calculate the checksum of the original file and send it to the server:
+                            int checksumOfTotalFile = DataIntegrityCheck.calculateChecksum(dataOfFileToSend);
+                            lastReceivedSeqNr = StopAndWaitProtocol.getLastReceivedSeqNr();
+                            lastReceivedAckNr = StopAndWaitProtocol.getLastReceivedAckNr();
+                            // create packet with checksum of total file in it, send it to the server and try to receive an ACK:
+                            DatagramPacket checksumToSend = null;
+                            try {
+                                checksumToSend = DataIntegrityCheck.createChecksumPacket(checksumOfTotalFile, lastReceivedSeqNr, lastReceivedAckNr, InetAddress.getByName(PacketProtocol.PI_ADDRESS), PacketProtocol.PI_PORT);
+                            } catch (UnknownHostException e) {
+                                System.out.println("Check the destination address input (server address), as the destination could not be found.");
+                            }
+                            if (Acknowledgement.sendChecksumAndReceiveAck(clientSocket, checksumToSend)) {
                                 System.out.println(fileName + " is successfully uploaded to the server.");
                             } else {
                                 System.out.println("The upload of " + fileName + " was not successful. Please, try again.");
                             }
-                        } else {
-                            if (flag == PacketProtocol.ACK) {
+                        }
+                        break;
+                    case PacketProtocol.DOWNLOAD:
+                        // respond with an acknowledgement to the server, to let it know that download can start:
+                        try {
+                            Acknowledgement.sendAcknowledgement(0, lastReceivedSeqNr, lastReceivedAckNr, clientSocket, InetAddress.getByName(PacketProtocol.PI_ADDRESS), PacketProtocol.PI_PORT);
+                        } catch (UnknownHostException e) {
+                            System.out.println("Check the destination address input (server address), as the destination could not be found.");
+                        }
+                        // receive the file from the server:
+                        StopAndWaitProtocol.receiveFile(clientSocket, totalFileSize);
+                        File downloadedFile = FileProtocol.bytesToFile(FileProtocol.CLIENT_FILEPATH, fileName, StopAndWaitProtocol.getFileInBytes());
+                        try {
+                            if (DataIntegrityCheck.receiveAndPerformTotalChecksum(clientSocket, InetAddress.getByName(PacketProtocol.PI_ADDRESS), PacketProtocol.PI_PORT, downloadedFile)) {
+                                System.out.println("The file is successfully downloaded.");
+                            } else {
+                                System.out.println("The file that you downloaded is not the same as the original file on the server and is therefore not saved.");
+                            }
+                        } catch (IOException e) {
+                            System.out.println("Check the destination address input (server address), as the destination could not be found.");
+                        }
+                        break;
+                    case PacketProtocol.REPLACE:
+                        dataOfFileToSend = FileProtocol.fileToBytes(FileProtocol.CLIENT_FILEPATH, newFileName);
+                        // send the byte representation of the file to the server:
+                        if (dataOfFileToSend != null) {
+                            try {
+                                StopAndWaitProtocol.sendFile(dataOfFileToSend, lastReceivedAckNr, lastReceivedSeqNr, clientSocket, InetAddress.getByName(PacketProtocol.PI_ADDRESS), PacketProtocol.PI_PORT);
+                            } catch (UnknownHostException e) {
+                                System.out.println("Check the destination address input (server address), as the destination could not be found.");
+                            }
+                            // calculate the checksum of the original file and send it to the server:
+                            int checksumOfTotalFile = DataIntegrityCheck.calculateChecksum(dataOfFileToSend);
+                            lastReceivedSeqNr = StopAndWaitProtocol.getLastReceivedSeqNr();
+                            lastReceivedAckNr = StopAndWaitProtocol.getLastReceivedAckNr();
+                            // create packet with checksum of total file in it, send it to the server and try to receive an ACK:
+                            DatagramPacket checksumToSend = null;
+                            try {
+                                checksumToSend = DataIntegrityCheck.createChecksumPacket(checksumOfTotalFile, lastReceivedSeqNr, lastReceivedAckNr, InetAddress.getByName(PacketProtocol.PI_ADDRESS), PacketProtocol.PI_PORT);
+                            } catch (UnknownHostException e) {
+                                System.out.println("Check the destination address input (server address), as the destination could not be found.");
+                            }
+                            if (Acknowledgement.sendChecksumAndReceiveAck(clientSocket, checksumToSend)) {
                                 System.out.println("The server successfully replaced " + oldFileName + " by " + newFileName + ".");
                             } else {
                                 System.out.println("The replacement of " + oldFileName + " by " + newFileName + " was not successful. Please, try again (but be aware that " + oldFileName + " does not exist on the server anymore!)");
                             }
                         }
-                    }
-                } else if (requestFlag == PacketProtocol.DOWNLOAD) {
-                    // respond with an acknowledgement to the server, to let it know that download can start:
-                    try {
-                        Acknowledgement.sendAcknowledgement(0, lastReceivedSeqNr, lastReceivedAckNr, clientSocket, InetAddress.getByName(PacketProtocol.PI_ADDRESS), PacketProtocol.PI_PORT);
-                    } catch (UnknownHostException e) {
-                        System.out.println("Check the destination address input (server address), as the destination could not be found.");
-                    }
-                    // receive the file from the server:
-                    StopAndWaitProtocol.receiveFile(clientSocket, totalFileSize);
-                    File downloadedFile = FileProtocol.bytesToFile(FileProtocol.CLIENT_FILEPATH, fileName, StopAndWaitProtocol.getFileInBytes());
-                    // receive the checksum of the original file from the server:
-                    DatagramPacket packetWithChecksum = DataIntegrityCheck.receiveChecksum(clientSocket);
-                    if (packetWithChecksum != null) {
-                        int receivedFlag = PacketProtocol.getFlag(packetWithChecksum.getData());
-                        // if you indeed received a packet with the CHECK flag, the checksum check can be performed:
-                        if (receivedFlag == PacketProtocol.CHECK) {
-                            // get information from the received packet:
-                            lastReceivedSeqNr = PacketProtocol.getSequenceNumber(packetWithChecksum.getData());
-                            lastReceivedAckNr = PacketProtocol.getAcknowledgementNumber(packetWithChecksum.getData());
-                            int receivedChecksum = DataIntegrityCheck.getChecksum(packetWithChecksum);
-                            // calculate the checksum of the received file:
-                            byte[] receivedFileInBytes = StopAndWaitProtocol.getFileInBytes();
-                            int checksumOfReceivedFile = DataIntegrityCheck.calculateChecksum(receivedFileInBytes);
-                            if (DataIntegrityCheck.areChecksumOfTwoFilesTheSame(receivedChecksum, checksumOfReceivedFile)) {
-                                // if the two checksums are the same, send an acknowledgement
-                                System.out.println("The file is successfully downloaded.");
-                                try {
-                                    Acknowledgement.sendAcknowledgement(0, lastReceivedSeqNr, lastReceivedAckNr, clientSocket, InetAddress.getByName(PacketProtocol.PI_ADDRESS), PacketProtocol.PI_PORT);
-                                } catch (UnknownHostException e) {
-                                    System.out.println("Check the destination address input (server address), as the destination could not be found.");
-                                }
-                            }
-                        } else {
-                            // if the two checksums are not the same, a mistake has occurred during transmission. The
-                            // downloaded file will be removed (as it is not the same as the original one) and an
-                            // INCORRECT flag will be sent to the server.
-                            if (downloadedFile != null && downloadedFile.delete()) {
-                                System.out.println("The file that you downloaded is not the same as the original file on the server and is therefore not saved.");
-                            }
-                            try {
-                                Acknowledgement.sendAcknowledgement(PacketProtocol.INCORRECT, lastReceivedSeqNr, lastReceivedAckNr, clientSocket, InetAddress.getByName(PacketProtocol.PI_ADDRESS), PacketProtocol.PI_PORT);
-                            } catch (UnknownHostException e) {
-                                System.out.println("Check the destination address input (server address), as the destination could not be found.");
-                            }
+                        break;
+                    case PacketProtocol.LIST:
+                        // respond with an acknowledgement to the server, to let it know that it can start sending the list:
+                        try {
+                            Acknowledgement.sendAcknowledgement(0, lastReceivedSeqNr, lastReceivedAckNr, clientSocket, InetAddress.getByName(PacketProtocol.PI_ADDRESS), PacketProtocol.PI_PORT);
+                        } catch (UnknownHostException e) {
+                            System.out.println("Check the destination address input (server address), as the destination could not be found.");
                         }
-                    }
-                } else if (requestFlag == PacketProtocol.LIST) {
-                    // respond with an acknowledgement to the server, to let it know that it can start sending the list:
-                    try {
-                        Acknowledgement.sendAcknowledgement(0, lastReceivedSeqNr, lastReceivedAckNr, clientSocket, InetAddress.getByName(PacketProtocol.PI_ADDRESS), PacketProtocol.PI_PORT);
-                    } catch (UnknownHostException e) {
-                        System.out.println("Check the destination address input (server address), as the destination could not be found.");
-                    }
-                    // receive the list from the server:
-                    StopAndWaitProtocol.receiveFile(clientSocket, totalFileSize);
-                    byte[] receivedList = StopAndWaitProtocol.getFileInBytes();
-                    // show the list:
-                    String listOfFiles = new String(receivedList);
-                    System.out.println(listOfFiles);
-                } else if (requestFlag == PacketProtocol.CLOSE) {
-                    stopClient();
-                    break;
+                        // receive the list from the server:
+                        StopAndWaitProtocol.receiveFile(clientSocket, totalFileSize);
+                        byte[] receivedList = StopAndWaitProtocol.getFileInBytes();
+                        // show the list:
+                        String listOfFiles = new String(receivedList);
+                        System.out.println(listOfFiles);
+                        break;
+                    case PacketProtocol.CLOSE:
+                        stopClient();
+                        break;
                 }
             }
             // wait for a new command by the user:

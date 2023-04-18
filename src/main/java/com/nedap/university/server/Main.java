@@ -1,7 +1,6 @@
 package com.nedap.university.server;
 
 public class Main {
-
     private static boolean keepAlive = true;
     private static boolean running = false;
 
