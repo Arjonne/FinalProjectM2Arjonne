@@ -120,7 +120,7 @@ public class Server {
             int fileSize = FileProtocol.getFileSize(FileProtocol.SERVER_FILEPATH, fileName);
             String responseMessage = ("Server successfully received the request for downloading " + fileName);
             Acknowledgement.sendAckWithFileSizeAndReceiveAck(0, fileSize, lastReceivedSeqNr, responseMessage, inetAddress, port, serverSocket);
-            byte[] ackReceived = Acknowledgement.getAcknowledgement();
+            byte[] ackReceived = Acknowledgement.getLastReceivedAcknowledgement();
             if (PacketProtocol.getFlag(ackReceived) == PacketProtocol.ACK) {
                 // first, get some information from the acknowledgement that is received:
                 lastReceivedSeqNr = PacketProtocol.getSequenceNumber(ackReceived);
@@ -217,7 +217,7 @@ public class Server {
             String responseMessage = ("Server successfully received the request for listing all files.");
             Acknowledgement.sendAckWithFileSizeAndReceiveAck(0, fileSize, lastReceivedSeqNr, responseMessage, inetAddress, port, serverSocket);
             // get information from the received acknowledgement and send the list of stored files:
-            byte[] ackReceived = Acknowledgement.getAcknowledgement();
+            byte[] ackReceived = Acknowledgement.getLastReceivedAcknowledgement();
             int lastReceivedAckNr = PacketProtocol.getAcknowledgementNumber(ackReceived);
             lastReceivedSeqNr = PacketProtocol.getSequenceNumber(ackReceived);
             StopAndWaitProtocol.sendFile(listOfFilesInBytes, lastReceivedSeqNr, lastReceivedAckNr, serverSocket, inetAddress, port);

@@ -6,7 +6,8 @@ import java.net.DatagramSocket;
 import java.net.InetAddress;
 
 public final class Acknowledgement {
-    static byte[] acknowledgement;
+    static byte[] lastReceivedAcknowledgement;
+    static byte[] lastSentAcknowledgement;
 
 
 //          --- CREATE ACKNOWLEDGEMENT PACKETS ---
@@ -48,6 +49,7 @@ public final class Acknowledgement {
         int sequenceNumber = PacketProtocol.generateRandomSequenceNumber();
         int acknowledgementNumber = lastReceivedSeqNr;
         byte[] acknowledgement = PacketProtocol.createPacketWithHeader(totalFileSize, sequenceNumber, acknowledgementNumber, (PacketProtocol.ACK + optionalExtraFlag), message.getBytes());
+        setLastSentAcknowledgement(acknowledgement);
         return new DatagramPacket(acknowledgement, acknowledgement.length, address, port);
     }
 
@@ -65,6 +67,7 @@ public final class Acknowledgement {
         int sequenceNumber = lastReceivedAckNr + 1;
         int acknowledgementNumber = lastReceivedSeqNr;
         byte[] acknowledgement = PacketProtocol.createHeader(0, sequenceNumber, acknowledgementNumber, (PacketProtocol.ACK + optionalExtraFlag), 0);
+        setLastSentAcknowledgement(acknowledgement);
         return new DatagramPacket(acknowledgement, acknowledgement.length, address, port);
     }
 
@@ -86,7 +89,7 @@ public final class Acknowledgement {
         try {
             socket.send(initialAckWithMessagePacket);
         } catch (IOException e) {
-            System.out.println("Check the destination address input, as the destination could not be found.");
+            System.out.println("AC1 -- Check the destination address input, as the destination could not be found.");
         }
     }
 
@@ -105,7 +108,26 @@ public final class Acknowledgement {
         try {
             socket.send(ackPacket);
         } catch (IOException e) {
-            System.out.println("Check the destination address input, as the destination could not be found.");
+            System.out.println("AC2 -- Check the destination address input, as the destination could not be found.");
+        }
+    }
+
+    //todo
+    /**
+     * Send last acknowledgement again.
+     * @param lastSentAcknowledgement
+     * @param socket
+     * @param address
+     * @param port
+     */
+    public static void resendAcknowledgement(byte[] lastSentAcknowledgement, DatagramSocket socket, InetAddress address, int port) {
+        if (lastSentAcknowledgement != null) {
+            DatagramPacket ackPacket = new DatagramPacket(lastSentAcknowledgement, lastSentAcknowledgement.length, address, port);
+            try {
+                socket.send(ackPacket);
+            } catch (IOException e) {
+                System.out.println("AC2 -- Check the destination address input, as the destination could not be found.");
+            }
         }
     }
 
@@ -131,7 +153,7 @@ public final class Acknowledgement {
                 // as long as there is no data received, stay in the loop and try receiving the ack. if timer has expired, resend the last packet sent.
                 socket.receive(ackPacket);
                 byte[] acknowledgement = ackPacket.getData();
-                setAcknowledgement(acknowledgement);
+                setLastReceivedAcknowledgement(acknowledgement);
                 isAckReceived = true;
             } catch (IOException e) {
                 System.out.println("Timer has expired - packet that is sent might not have arrived so will be retransmitted.");
@@ -162,7 +184,7 @@ public final class Acknowledgement {
     public static boolean sendChecksumAndReceiveAck(DatagramSocket socket, DatagramPacket checksumPacket) {
         DatagramPacket ackPacket = createAckPacketToReceive();
         sendPacketAndReceiveAck(socket, ackPacket, checksumPacket);
-        byte[] ackReceived = getAcknowledgement();
+        byte[] ackReceived = getLastReceivedAcknowledgement();
         int flag = PacketProtocol.getFlag(ackReceived);
         return flag == PacketProtocol.ACK;
     }
@@ -189,20 +211,40 @@ public final class Acknowledgement {
 //          --- GETTERS AND SETTERS ---
 
     /**
-     * Get the byte representation of the acknowledgement packet.
+     * Get the byte representation of the last received acknowledgement packet.
      *
-     * @return the byte representation of the acknowledgement packet.
+     * @return the byte representation of the last received acknowledgement packet.
      */
-    public static byte[] getAcknowledgement() {
-        return acknowledgement;
+    public static byte[] getLastReceivedAcknowledgement() {
+        return lastReceivedAcknowledgement;
     }
 
     /**
-     * Set the byte representation of the acknowledgement packet to be able to reuse this information in other classes.
+     * Set the byte representation of the last received acknowledgement packet to be able to reuse this information in other classes.
      *
-     * @param acknowledgement is the byte representation of the acknowledgement packet.
+     * @param acknowledgement is the byte representation of the last received acknowledgement packet.
      */
-    public static void setAcknowledgement(byte[] acknowledgement) {
-        Acknowledgement.acknowledgement = acknowledgement;
+    public static void setLastReceivedAcknowledgement(byte[] acknowledgement) {
+        Acknowledgement.lastReceivedAcknowledgement = acknowledgement;
     }
+
+    /**
+     * Get the byte representation of the last sent acknowledgement packet.
+     *
+     * @return the byte representation of the last sent acknowledgement packet.
+     */
+    public static byte[] getLastSentAcknowledgement() {
+        return lastSentAcknowledgement;
+    }
+
+    /**
+     * Set the byte representation of the last sent acknowledgement packet to be able to reuse this information in other classes.
+     *
+     * @param acknowledgement is the byte representation of the last sent acknowledgement packet.
+     */
+    public static void setLastSentAcknowledgement(byte[] acknowledgement) {
+        Acknowledgement.lastSentAcknowledgement = acknowledgement;
+    }
+
+
 }

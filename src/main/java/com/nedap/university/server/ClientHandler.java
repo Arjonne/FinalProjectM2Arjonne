@@ -35,9 +35,9 @@ public class ClientHandler {
             DatagramPacket receivedPacket = server.receiveRequest();
             if (receivedPacket == null) {
                 try {
-                    Thread.sleep(1000);
+                    Thread.sleep(500);
                 } catch (InterruptedException e) {
-                    System.out.println("Not able to sleep for one second due to interruption.");
+                    System.out.println("Not able to sleep due to interruption.");
                 }
             } else {
                 // if a request is received, get the byte representation of the request packet (including header) and
@@ -46,6 +46,12 @@ public class ClientHandler {
                 InetAddress inetAddress = receivedPacket.getAddress();
                 int port = receivedPacket.getPort();
                 int flag = PacketProtocol.getFlag(dataOfReceivedPacket);
+                // check if the received packet is a new request. If not, it is probably some acknowledgement from the
+                // last request that is retransmitted as the acknowledgement could have been lost. In that case, try to
+                // receive a new request:
+                if (flag != PacketProtocol.UPLOAD && flag != PacketProtocol.DOWNLOAD && flag != PacketProtocol.REMOVE && flag != PacketProtocol.REPLACE && flag != PacketProtocol.LIST && flag != PacketProtocol.CLOSE) {
+                    continue;
+                }
                 int totalFileSize = PacketProtocol.getFileSizeInPacket(dataOfReceivedPacket);
                 int lastReceivedSeqNr = PacketProtocol.getSequenceNumber(dataOfReceivedPacket);
                 String fileNameInData = new String(receivedPacket.getData(), PacketProtocol.HEADER_SIZE, (receivedPacket.getLength() - PacketProtocol.HEADER_SIZE));

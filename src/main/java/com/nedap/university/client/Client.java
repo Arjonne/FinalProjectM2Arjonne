@@ -75,11 +75,12 @@ public class Client implements Runnable {
             // send request to the server and try to receive an ACK (if ACK not received in time, resend packet):
             Acknowledgement.sendRequestAndReceiveAckWithMessage(clientSocket, getRequestPacket());
             // print the message from the server:
-            byte[] acknowledgement = Acknowledgement.getAcknowledgement();
+            byte[] acknowledgement = Acknowledgement.getLastReceivedAcknowledgement();
             String messageFromServer = new String(acknowledgement, PacketProtocol.HEADER_SIZE, (acknowledgement.length - PacketProtocol.HEADER_SIZE));
             System.out.println(messageFromServer.trim());
             // if the server responded with an acknowledgement, execute the command:
-            if (PacketProtocol.getFlag(acknowledgement) == PacketProtocol.ACK) {
+            int receivedFlag = PacketProtocol.getFlag(acknowledgement);
+            if (receivedFlag == PacketProtocol.ACK) {
                 // first, get some information from the packet that is received:
                 int lastReceivedSeqNr = PacketProtocol.getSequenceNumber(acknowledgement);
                 int lastReceivedAckNr = PacketProtocol.getAcknowledgementNumber(acknowledgement);
@@ -102,7 +103,7 @@ public class Client implements Runnable {
                             try {
                                 StopAndWaitProtocol.sendFile(dataOfFileToSend, lastReceivedSeqNr, lastReceivedAckNr, clientSocket, InetAddress.getByName(PacketProtocol.PI_ADDRESS), PacketProtocol.PI_PORT);
                             } catch (UnknownHostException e) {
-                                System.out.println("Check the destination address input (server address), as the destination could not be found.");
+                                System.out.println("CL0 -- Check the destination address input (server address), as the destination could not be found.");
                             }
                             // calculate the checksum of the original file and send it to the server:
                             int checksumOfTotalFile = DataIntegrityCheck.calculateChecksum(dataOfFileToSend);
@@ -113,7 +114,7 @@ public class Client implements Runnable {
                             try {
                                 checksumToSend = DataIntegrityCheck.createChecksumPacket(checksumOfTotalFile, lastReceivedSeqNr, lastReceivedAckNr, InetAddress.getByName(PacketProtocol.PI_ADDRESS), PacketProtocol.PI_PORT);
                             } catch (UnknownHostException e) {
-                                System.out.println("Check the destination address input (server address), as the destination could not be found.");
+                                System.out.println("CL1 -- Check the destination address input (server address), as the destination could not be found.");
                             }
                             if (Acknowledgement.sendChecksumAndReceiveAck(clientSocket, checksumToSend)) {
                                 System.out.println(fileName + " is successfully uploaded to the server.");
@@ -127,7 +128,7 @@ public class Client implements Runnable {
                         try {
                             Acknowledgement.sendAcknowledgement(0, lastReceivedSeqNr, lastReceivedAckNr, clientSocket, InetAddress.getByName(PacketProtocol.PI_ADDRESS), PacketProtocol.PI_PORT);
                         } catch (UnknownHostException e) {
-                            System.out.println("Check the destination address input (server address), as the destination could not be found.");
+                            System.out.println("CL2 -- Check the destination address input (server address), as the destination could not be found.");
                         }
                         // receive the file from the server:
                         StopAndWaitProtocol.receiveFile(clientSocket, totalFileSize);
@@ -139,7 +140,7 @@ public class Client implements Runnable {
                                 System.out.println("The file that you downloaded is not the same as the original file on the server and is therefore not saved.");
                             }
                         } catch (IOException e) {
-                            System.out.println("Check the destination address input (server address), as the destination could not be found.");
+                            System.out.println("CL3 --Check the destination address input (server address), as the destination could not be found.");
                         }
                         break;
                     case PacketProtocol.REPLACE:
@@ -149,7 +150,7 @@ public class Client implements Runnable {
                             try {
                                 StopAndWaitProtocol.sendFile(dataOfFileToSend, lastReceivedSeqNr, lastReceivedAckNr, clientSocket, InetAddress.getByName(PacketProtocol.PI_ADDRESS), PacketProtocol.PI_PORT);
                             } catch (UnknownHostException e) {
-                                System.out.println("Check the destination address input (server address), as the destination could not be found.");
+                                System.out.println("CL4 -- Check the destination address input (server address), as the destination could not be found.");
                             }
                             // calculate the checksum of the original file and send it to the server:
                             int checksumOfTotalFile = DataIntegrityCheck.calculateChecksum(dataOfFileToSend);
@@ -160,7 +161,7 @@ public class Client implements Runnable {
                             try {
                                 checksumToSend = DataIntegrityCheck.createChecksumPacket(checksumOfTotalFile, lastReceivedSeqNr, lastReceivedAckNr, InetAddress.getByName(PacketProtocol.PI_ADDRESS), PacketProtocol.PI_PORT);
                             } catch (UnknownHostException e) {
-                                System.out.println("Check the destination address input (server address), as the destination could not be found.");
+                                System.out.println("CL 5 -- Check the destination address input (server address), as the destination could not be found.");
                             }
                             if (Acknowledgement.sendChecksumAndReceiveAck(clientSocket, checksumToSend)) {
                                 System.out.println("The server successfully replaced " + oldFileName + " by " + newFileName + ".");
@@ -174,7 +175,7 @@ public class Client implements Runnable {
                         try {
                             Acknowledgement.sendAcknowledgement(0, lastReceivedSeqNr, lastReceivedAckNr, clientSocket, InetAddress.getByName(PacketProtocol.PI_ADDRESS), PacketProtocol.PI_PORT);
                         } catch (UnknownHostException e) {
-                            System.out.println("Check the destination address input (server address), as the destination could not be found.");
+                            System.out.println("CL6 -- Check the destination address input (server address), as the destination could not be found.");
                         }
                         // receive the list from the server:
                         StopAndWaitProtocol.receiveFile(clientSocket, totalFileSize);
@@ -187,6 +188,18 @@ public class Client implements Runnable {
                         stopClient();
                         break;
                 }
+            } else if (receivedFlag == PacketProtocol.LAST || receivedFlag == PacketProtocol.CHECK) {
+                byte[] lastAckSent = Acknowledgement.getLastSentAcknowledgement();
+                try {
+                    Acknowledgement.resendAcknowledgement(lastAckSent, clientSocket, InetAddress.getByName(PacketProtocol.PI_ADDRESS), PacketProtocol.PI_PORT);
+                } catch (UnknownHostException e) {
+                    System.out.println("CL11 -- Check the destination address input, as the destination could not be found.");
+                }
+                // can be another flag if the acknowledgement to the last packet of a previous download or list was lost.
+                // If this one got lost, the last packet (in case of list) or checksum (in case of download) would be
+                // resent, although the client already handled the input from this packet. Therefore, no actions need
+                // to be executed if this packet is received again, and the client can wait for a new packet.
+                continue;
             }
             // wait for a new command by the user:
             System.out.println("Give the command you want to execute next:");
@@ -217,7 +230,7 @@ public class Client implements Runnable {
             setFileName(fileNameFromRequest);
             activateTryToReceive();
         } catch (IOException e) {
-            System.out.println("Check the destination address input (server address), as the destination could not be found.");
+            System.out.println("CL7 -- Check the destination address input (server address), as the destination could not be found.");
         }
     }
 
@@ -243,7 +256,7 @@ public class Client implements Runnable {
             setNewFileName(newFileNameFromRequest);
             activateTryToReceive();
         } catch (IOException e) {
-            System.out.println("Check the destination address input (server address), as the destination could not be found.");
+            System.out.println("CL 8 -- Check the destination address input (server address), as the destination could not be found.");
         }
     }
 
@@ -261,7 +274,7 @@ public class Client implements Runnable {
             setRequestPacket(requestPacket);
             activateTryToReceive();
         } catch (IOException e) {
-            System.out.println("Check the destination address input (server address), as the destination could not be found.");
+            System.out.println("CL 9 -- Check the destination address input (server address), as the destination could not be found.");
         }
     }
 

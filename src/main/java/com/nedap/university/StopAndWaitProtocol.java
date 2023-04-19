@@ -76,7 +76,6 @@ public class StopAndWaitProtocol {
         }
     }
 
-
     /**
      * Receive packets with file data and send an acknowledgement as response.
      *
@@ -98,6 +97,12 @@ public class StopAndWaitProtocol {
                 DatagramPacket fileDataPacket = new DatagramPacket(receivedPacket, receivedPacket.length);
                 socket.receive(fileDataPacket);
                 byte[] dataOfReceivedPacket = fileDataPacket.getData();
+                // check flags to see if file data is received; if not, don't execute any further actions but wait for
+                // the next packet to arrive (as the ack to the request or ack with file size could be lost too):
+                int receivedFlag = PacketProtocol.getFlag(dataOfReceivedPacket);
+                if (receivedFlag != PacketProtocol.MOREFRAGMENTS && receivedFlag != PacketProtocol.LAST) {
+                    continue;
+                }
                 // get address and port of the destination this packet came from (and where an acknowledgement needs to
                 // be sent to):
                 InetAddress inetAddress = fileDataPacket.getAddress();
@@ -118,7 +123,7 @@ public class StopAndWaitProtocol {
                         filePointerReceiver = filePointerReceiver + dataLengthInPacket;
                         lastSequenceNumberReceived = sequenceNumber;
                     }
-                    if (PacketProtocol.getFlag(dataOfReceivedPacket) == PacketProtocol.LAST) {
+                    if (receivedFlag == PacketProtocol.LAST) {
                         // store the byte representation of the received file in order to be able to do hash code check if necessary.
                         setFileInBytes(dataCompleteFile);
                         // create file from dataOfReceivedPacket that is received:
@@ -126,7 +131,7 @@ public class StopAndWaitProtocol {
                     }
                 }
             } catch (IOException e) {
-                System.out.println("Check the destination address input (server address), as the destination could not be found.");
+                System.out.println("SW -- Check the destination address input (server address), as the destination could not be found.");
             }
         }
     }

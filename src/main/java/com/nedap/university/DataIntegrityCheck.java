@@ -102,8 +102,7 @@ public final class DataIntegrityCheck {
                 socket.receive(packetWithChecksum);
                 received = true;
             } catch (IOException e) {
-                System.out.println("No packet could be received.");
-                return null;
+                System.out.println("Timer has expired - packet that is sent might not have arrived so will be retransmitted.");
             }
         }
         return packetWithChecksum;
@@ -156,46 +155,44 @@ public final class DataIntegrityCheck {
      * Receive the checksum of the original file, calculate the checksum of the received file, compare the results and
      * send an acknowledgement to the source.
      *
-     * @param socket is the socket via which the client and server are connected.
-     * @param inetAddress is the address to which the acknowledgement needs to be sent.
-     * @param port is the port to which the acknowledgement needs to be sent.
+     * @param socket       is the socket via which the client and server are connected.
+     * @param inetAddress  is the address to which the acknowledgement needs to be sent.
+     * @param port         is the port to which the acknowledgement needs to be sent.
      * @param receivedFile is the file that is received.
      * @return true if the checksum is correct, false if not.
      */
     public static boolean receiveAndPerformTotalChecksum(DatagramSocket socket, InetAddress inetAddress, int port, File receivedFile) {
-        // receive the checksum of the original file from the client:
-        DatagramPacket packetWithChecksum = DataIntegrityCheck.receiveChecksum(socket);
-        System.out.println("buffer is created");
-        if (packetWithChecksum != null) {
-            System.out.println("checksum is received");
+        boolean correctlyReceived = false;
+        while (!correctlyReceived) {
+            // receive the checksum of the original file from the client:
+            DatagramPacket packetWithChecksum = DataIntegrityCheck.receiveChecksum(socket);
             int receivedFlag = PacketProtocol.getFlag(packetWithChecksum.getData());
-            System.out.println("received flag is " + receivedFlag);
-            // if you indeed received a packet with the CHECK flag, the checksum check can be performed:
-            if (receivedFlag == PacketProtocol.CHECK) {
-                int lastReceivedSeqNr = PacketProtocol.getSequenceNumber(packetWithChecksum.getData());
-                int lastReceivedAckNr = PacketProtocol.getAcknowledgementNumber(packetWithChecksum.getData());
-                int receivedChecksum = DataIntegrityCheck.getChecksum(packetWithChecksum);
-                System.out.println("received checksum is: " + receivedChecksum);
-                // calculate the checksum of the received file:
-                byte[] receivedFileInBytes = StopAndWaitProtocol.getFileInBytes();
-                int checksumOfReceivedFile = DataIntegrityCheck.calculateChecksum(receivedFileInBytes);
-                System.out.println("calculated checksum is: " + checksumOfReceivedFile);
-                if (DataIntegrityCheck.areChecksumOfTwoFilesTheSame(receivedChecksum, checksumOfReceivedFile)) {
-                    // if the two checksums are the same, send an acknowledgement
-                    Acknowledgement.sendAcknowledgement(0, lastReceivedSeqNr, lastReceivedAckNr, socket, inetAddress, port);
-                    return true;
-                } else {
-                    // if the two checksums are not the same, a mistake has occurred during transmission. The
-                    // downloaded file will be removed (as it is not the same as the original one) and an
-                    // INCORRECT flag will be sent to the server.
-                    if (receivedFile != null && receivedFile.delete()) {
-                        Acknowledgement.sendAcknowledgement(PacketProtocol.INCORRECT, lastReceivedSeqNr, lastReceivedAckNr, socket, inetAddress, port);
-                        return false;
-                    }
+            // if you did not receive a packet with the CHECK flag, wait for a new packet. Otherwise, the checksum
+            // can be performed.
+            if (receivedFlag != PacketProtocol.CHECK) {
+                continue;
+            }
+            correctlyReceived = true;
+            int lastReceivedSeqNr = PacketProtocol.getSequenceNumber(packetWithChecksum.getData());
+            int lastReceivedAckNr = PacketProtocol.getAcknowledgementNumber(packetWithChecksum.getData());
+            int receivedChecksum = DataIntegrityCheck.getChecksum(packetWithChecksum);
+            // calculate the checksum of the received file:
+            byte[] receivedFileInBytes = StopAndWaitProtocol.getFileInBytes();
+            int checksumOfReceivedFile = DataIntegrityCheck.calculateChecksum(receivedFileInBytes);
+            if (DataIntegrityCheck.areChecksumOfTwoFilesTheSame(receivedChecksum, checksumOfReceivedFile)) {
+                // if the two checksums are the same, send an acknowledgement
+                Acknowledgement.sendAcknowledgement(0, lastReceivedSeqNr, lastReceivedAckNr, socket, inetAddress, port);
+                return true;
+            } else {
+                // if the two checksums are not the same, a mistake has occurred during transmission. The
+                // downloaded file will be removed (as it is not the same as the original one) and an
+                // INCORRECT flag will be sent to the server.
+                if (receivedFile != null && receivedFile.delete()) {
+                    Acknowledgement.sendAcknowledgement(PacketProtocol.INCORRECT, lastReceivedSeqNr, lastReceivedAckNr, socket, inetAddress, port);
+                    return false;
                 }
             }
         }
-        System.out.println("checksum was probably not received in time.");
         return false;
     }
 }

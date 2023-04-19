@@ -7,8 +7,8 @@ import java.util.Random;
  */
 public final class PacketProtocol {
 //          --- ADDRESS AND PORT INFORMATION ---
-    public static final String PI_ADDRESS = "localhost";
-//    public static final String PI_ADDRESS = "172.16.1.1";
+//    public static final String PI_ADDRESS = "localhost";
+    public static final String PI_ADDRESS = "172.16.1.1";
     public static final int PI_PORT = 9090;
 
 //          --- SIZES ---
