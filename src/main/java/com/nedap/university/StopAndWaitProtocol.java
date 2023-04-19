@@ -24,8 +24,9 @@ public class StopAndWaitProtocol {
      * @param port              is the port to which the packet(s) need to be sent.
      */
     public static void sendFile(byte[] fileInBytes, int lastReceivedSeqNr, int lastReceivedAckNr, DatagramSocket socket, InetAddress address, int port) {
+        System.out.println("Sending file with size " + fileInBytes.length);
         boolean finished = false;
-        int totalNumberOfPackets = (fileInBytes.length / PacketProtocol.MAX_PACKET_SIZE);
+        int totalNumberOfPackets = (fileInBytes.length / (PacketProtocol.MAX_PACKET_SIZE - PacketProtocol.HEADER_SIZE));
         int currentPacketNumber = 0; // start with 0 as totalNumberOfPackets is also rounded down.
         int filePointerSender = 0;
         int sequenceNumber = lastReceivedAckNr + 1;
@@ -65,8 +66,7 @@ public class StopAndWaitProtocol {
                     filePointerSender = filePointerSender + dataLenghtInPacket;
                     acknowledgementNumber = PacketProtocol.getSequenceNumber(acknowledgement);
                     currentPacketNumber++;
-                    //todo check of 0xffffffff - 1 klopt in debug!
-                    if (sequenceNumber == 0xffffffff - 1) {
+                    if (sequenceNumber == 0xffffffff) {
                         sequenceNumber = 0;
                     } else {
                         sequenceNumber++;
@@ -84,6 +84,7 @@ public class StopAndWaitProtocol {
      * @param totalFileSize is the total size of the file that needs to be received.
      */
     public static void receiveFile(DatagramSocket socket, int totalFileSize) {
+        System.out.println("receiving file with size " + totalFileSize);
         byte[] dataCompleteFile = new byte[totalFileSize];
         int lastSequenceNumberReceived = 0;
         int filePointerReceiver = 0;
@@ -125,7 +126,7 @@ public class StopAndWaitProtocol {
                     }
                 }
             } catch (IOException e) {
-                e.printStackTrace(); // todo
+                System.out.println("Check the destination address input (server address), as the destination could not be found.");
             }
         }
     }
@@ -140,9 +141,7 @@ public class StopAndWaitProtocol {
      */
     public static void setFileInBytes(byte[] dataCompleteFile) {
         completeFileInBytes = new byte[dataCompleteFile.length];
-        for (int i = 0; i < dataCompleteFile.length; i++) {
-            completeFileInBytes[i] = dataCompleteFile[i];
-        }
+        System.arraycopy(dataCompleteFile, 0, completeFileInBytes, 0, dataCompleteFile.length);
     }
 
     /**

@@ -83,7 +83,7 @@ public class Server {
      * @param serverSocket      is the socket via which the server and client are connected.
      */
     public void receiveFile(String fileName, int totalFileSize, int lastReceivedSeqNr, InetAddress inetAddress, int port, DatagramSocket serverSocket) {
-        if (!FileProtocol.checkIfFileExists(fileName, filePath)) {
+        if (!FileProtocol.doesFileExist(fileName, filePath)) {
             // if the file not exists on the server yet, it can be uploaded. Create a message that can be sent in the
             // acknowledgement and send this acknowledgement to the server:
             String responseMessage = ("Server successfully received the request for uploading " + fileName);
@@ -109,7 +109,7 @@ public class Server {
      * @param serverSocket      is the socket via which the server and client are connected.
      */
     public void sendFile(String fileName, int lastReceivedSeqNr, InetAddress inetAddress, int port, DatagramSocket serverSocket) {
-        if (!FileProtocol.checkIfFileExists(fileName, filePath)) {
+        if (!FileProtocol.doesFileExist(fileName, filePath)) {
             String responseMessage = (fileName + " does not exist on the server and can therefore not be downloaded.");
             Acknowledgement.sendInitialAcknowledgementWithMessage(PacketProtocol.DOESNOTEXIST, 0, lastReceivedSeqNr, responseMessage, serverSocket, inetAddress, port);
         } else {
@@ -157,7 +157,7 @@ public class Server {
      */
     public void removeFile(String fileName, int lastReceivedSeqNr, InetAddress inetAddress, int port, DatagramSocket
             serverSocket) {
-        if (isFileRemoved(fileName)) {
+        if (isFileRemoved(fileName, filePath)) {
             String responseMessage = ("Server successfully received the request for removing " + fileName + ". File is removed.");
             Acknowledgement.sendInitialAcknowledgementWithMessage(0, 0, lastReceivedSeqNr, responseMessage, serverSocket, inetAddress, port);
         } else {
@@ -181,7 +181,7 @@ public class Server {
                             int lastReceivedSeqNr, InetAddress inetAddress,
                             int port, DatagramSocket serverSocket) {
         // if the old file exists on the server, first try to remove it. Then, try to receive the new file from the client.
-        if (isFileRemoved(oldFileName)) {
+        if (isFileRemoved(oldFileName, filePath)) {
             String responseMessage = ("Server successfully received the request for replacing " + oldFileName + " by " + newFileName + ".");
             Acknowledgement.sendInitialAcknowledgementWithMessage(0, 0, lastReceivedSeqNr, responseMessage, serverSocket, inetAddress, port);
             StopAndWaitProtocol.receiveFile(serverSocket, totalFileSize);
@@ -244,8 +244,8 @@ public class Server {
      * @param fileName is the name of the file.
      * @return true if the file existed and could be removed, false if not.
      */
-    public boolean isFileRemoved(String fileName) {
-        if (FileProtocol.checkIfFileExists(fileName, filePath)) {
+    public boolean isFileRemoved(String fileName, File filePath) {
+        if (FileProtocol.doesFileExist(fileName, filePath)) {
         File[] listOfFiles = filePath.listFiles();
             for (File file : listOfFiles) {
                 if (file.getName().equals(fileName)) {

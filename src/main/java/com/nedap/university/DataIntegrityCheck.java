@@ -23,9 +23,9 @@ public final class DataIntegrityCheck {
     public static byte[] getChecksumInput(byte[] packetHeader, int payloadLength) {
         byte[] totalChecksumInput = new byte[(PacketProtocol.HEADER_SIZE + 2)];
         System.arraycopy(packetHeader, 0, totalChecksumInput, 0, (PacketProtocol.HEADER_SIZE - 2));
-        totalChecksumInput[PacketProtocol.HEADER_SIZE - 2] = (byte) ((payloadLength >> 8) & 0xff);
+        totalChecksumInput[PacketProtocol.HEADER_SIZE - 2] = (byte) (payloadLength >> 8);
         totalChecksumInput[PacketProtocol.HEADER_SIZE - 1] = (byte) (payloadLength & 0xff);
-        totalChecksumInput[PacketProtocol.HEADER_SIZE] = (byte) ((PacketProtocol.HEADER_SIZE >> 8) & 0xff);
+        totalChecksumInput[PacketProtocol.HEADER_SIZE] = (byte) (PacketProtocol.HEADER_SIZE >> 8);
         totalChecksumInput[PacketProtocol.HEADER_SIZE + 1] = (byte) (PacketProtocol.HEADER_SIZE & 0xff);
         return totalChecksumInput;
     }
@@ -42,7 +42,6 @@ public final class DataIntegrityCheck {
         int i = 0;
         while (length > 1) {
             checksum = checksum + (((checksumInput[i] & 0xff) << 8) | (checksumInput[i + 1] & 0xff));
-
             if ((checksum & 0xffff0000) > 0) {
                 checksum = checksum & 0xffff;
                 checksum++;
@@ -51,7 +50,7 @@ public final class DataIntegrityCheck {
             length = length - 2;
         }
         if (length == 1) {
-            checksum = checksum + (checksumInput[i] >> 8);
+            checksum = checksum + (checksumInput[i] << 8);
             if ((checksum & 0xffff0000) > 0) {
                 checksum = checksum & 0xffff;
                 checksum++;
@@ -166,16 +165,21 @@ public final class DataIntegrityCheck {
     public static boolean receiveAndPerformTotalChecksum(DatagramSocket socket, InetAddress inetAddress, int port, File receivedFile) {
         // receive the checksum of the original file from the client:
         DatagramPacket packetWithChecksum = DataIntegrityCheck.receiveChecksum(socket);
+        System.out.println("buffer is created");
         if (packetWithChecksum != null) {
+            System.out.println("checksum is received");
             int receivedFlag = PacketProtocol.getFlag(packetWithChecksum.getData());
+            System.out.println("received flag is " + receivedFlag);
             // if you indeed received a packet with the CHECK flag, the checksum check can be performed:
             if (receivedFlag == PacketProtocol.CHECK) {
                 int lastReceivedSeqNr = PacketProtocol.getSequenceNumber(packetWithChecksum.getData());
                 int lastReceivedAckNr = PacketProtocol.getAcknowledgementNumber(packetWithChecksum.getData());
                 int receivedChecksum = DataIntegrityCheck.getChecksum(packetWithChecksum);
+                System.out.println("received checksum is: " + receivedChecksum);
                 // calculate the checksum of the received file:
                 byte[] receivedFileInBytes = StopAndWaitProtocol.getFileInBytes();
                 int checksumOfReceivedFile = DataIntegrityCheck.calculateChecksum(receivedFileInBytes);
+                System.out.println("calculated checksum is: " + checksumOfReceivedFile);
                 if (DataIntegrityCheck.areChecksumOfTwoFilesTheSame(receivedChecksum, checksumOfReceivedFile)) {
                     // if the two checksums are the same, send an acknowledgement
                     Acknowledgement.sendAcknowledgement(0, lastReceivedSeqNr, lastReceivedAckNr, socket, inetAddress, port);

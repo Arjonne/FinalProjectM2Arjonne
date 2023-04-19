@@ -49,6 +49,7 @@ public final class FileProtocol {
                 byte nextByte = (byte) fileInputStream.read();
                 fileInByteArray[i] = nextByte;
             }
+            fileInputStream.close();
             return fileInByteArray;
         } catch (IOException e) {
             System.out.println("Could not copy byte representation of file into a new byte array.");
@@ -104,7 +105,7 @@ public final class FileProtocol {
      */
     public static boolean areFilesStoredOnServer(File filePath) {
         File[] listOfFiles = filePath.listFiles();
-        return listOfFiles != null;
+        return listOfFiles.length != 0;
     }
 
     /**
@@ -123,7 +124,8 @@ public final class FileProtocol {
             }
             return listedFiles;
         } else {
-            return null;
+            String listedFiles = "\nNo files to show: there are stored on the server yet. \n";
+            return listedFiles;
         }
     }
 
@@ -134,7 +136,7 @@ public final class FileProtocol {
      * @param filePath        is the path with folder in which the files are stored.
      * @return true if file already exists, false if not.
      */
-    public static boolean checkIfFileExists(String fileNameToCheck, File filePath) {
+    public static boolean doesFileExist(String fileNameToCheck, File filePath) {
         File[] listOfFiles = filePath.listFiles();
         if (areFilesStoredOnServer(filePath)) {
                 for (File file : listOfFiles) {

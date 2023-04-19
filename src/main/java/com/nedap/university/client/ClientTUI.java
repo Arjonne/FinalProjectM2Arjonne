@@ -53,7 +53,7 @@ public class ClientTUI {
                     if (fileName == null) {
                         System.out.println("File name should be added in the upload request. See OPTIONS for the correct format. \n" +
                                 "Give the command you want to execute next:");
-                    } else if (!FileProtocol.checkIfFileExists(fileName, FileProtocol.createFilePath(FileProtocol.CLIENT_FILEPATH))) {
+                    } else if (!FileProtocol.doesFileExist(fileName, FileProtocol.createFilePath(FileProtocol.CLIENT_FILEPATH))) {
                         System.out.println("The file " + fileName + " does not exist in your local folder " + FileProtocol.CLIENT_FILEPATH + ", and can therefore not be uploaded to the server. \n" +
                                 "Give the command you want to execute next:");
                     } else {
@@ -65,7 +65,7 @@ public class ClientTUI {
                         System.out.println("File name should be added in the download request. See OPTIONS for the correct format. \n" +
                                 "Give the command you want to execute next:");
                     } else {
-                        if (FileProtocol.checkIfFileExists(fileName, FileProtocol.createFilePath(FileProtocol.CLIENT_FILEPATH))) {
+                        if (FileProtocol.doesFileExist(fileName, FileProtocol.createFilePath(FileProtocol.CLIENT_FILEPATH))) {
                             System.out.println("The file " + fileName + " already exists in your local folder " + FileProtocol.CLIENT_FILEPATH + ", you can therefore not download this file again. \n" +
                                     "Give the command you want to execute next:");
                         } else {
@@ -85,7 +85,7 @@ public class ClientTUI {
                     if (oldFileName == null || newFileName == null) {
                         System.out.println("Two file names should be added in the replace request. See OPTIONS for the correct format. \n" +
                                 "Give the command you want to execute next:");
-                    } else if (!FileProtocol.checkIfFileExists(newFileName, FileProtocol.createFilePath(FileProtocol.CLIENT_FILEPATH))) {
+                    } else if (!FileProtocol.doesFileExist(newFileName, FileProtocol.createFilePath(FileProtocol.CLIENT_FILEPATH))) {
                         System.out.println("The file " + newFileName + " does not exist in your local folder " + FileProtocol.CLIENT_FILEPATH + ", and can therefore not replace " + oldFileName + ". \n" +
                                 "Give the command you want to execute next:");
                     } else {
