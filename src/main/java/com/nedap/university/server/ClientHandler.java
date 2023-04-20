@@ -12,6 +12,9 @@ import java.net.InetAddress;
 public class ClientHandler {
     private final Server server;
     private final DatagramSocket serverSocket;
+    private String lastFileDownload;
+    private int lastFlag;
+    private String lastRemovedFile;
 
     /**
      * Create a clientHandler to be able to handle the input from the client that is connected to the server (on the PI).
@@ -70,31 +73,60 @@ public class ClientHandler {
                     case PacketProtocol.UPLOAD:
                         System.out.println("Client sent request for uploading " + fileName + ".");
                         server.receiveFile(fileName, totalFileSize, lastReceivedSeqNr, inetAddress, port, serverSocket);
+                        setLastFlag(PacketProtocol.UPLOAD);
                         break;
                     case PacketProtocol.DOWNLOAD:
                         System.out.println("Client sent request for downloading " + fileName + ".");
                         server.sendFile(fileName, lastReceivedSeqNr, inetAddress, port, serverSocket);
+                        setLastFlag(PacketProtocol.DOWNLOAD);
                         break;
                     case PacketProtocol.REMOVE:
+                        if (lastFlag == PacketProtocol.REMOVE && lastRemovedFile.equals(fileName)) {
+                            continue;
+                        }
                         System.out.println("Client sent request for removing " + fileName + ".");
                         server.removeFile(fileName, lastReceivedSeqNr, inetAddress, port, serverSocket);
+                        setLastRemovedFile(fileName);
+                        setLastFlag(PacketProtocol.REMOVE);
                         break;
                     case PacketProtocol.REPLACE:
                         System.out.println("Client sent request for replacing " + oldFileName + " by " + newFileName + ".");
                         server.replaceFile(oldFileName, newFileName, totalFileSize, lastReceivedSeqNr, inetAddress, port, serverSocket);
+                        setLastFlag(PacketProtocol.REPLACE);
                         break;
                     case PacketProtocol.LIST:
                         System.out.println("Client sent request for listing all available files.");
                         server.listFiles(lastReceivedSeqNr, inetAddress, port, serverSocket);
+                        setLastFlag(PacketProtocol.LIST);
                         break;
                     case PacketProtocol.CLOSE:
+                        if (lastFlag == PacketProtocol.CLOSE) {
+                            continue;
+                        }
                         System.out.println("Client closed the application. If you want to close the server on the Raspberry Pi too, use the following commands: \n\n" +
                                 "sudo systemctl stop num2.service \n" +
                                 "sudo shutdown -h now");
                         server.respondToClosingClient(lastReceivedSeqNr, inetAddress, port, serverSocket);
+                        setLastFlag(PacketProtocol.CLOSE);
                         break;
                 }
             }
         }
+    }
+
+    /**
+     * Set the last flag used.
+     * @param flag is the received flag.
+     */
+    public void setLastFlag(int flag) {
+        this.lastFlag = flag;
+    }
+
+    /**
+     * Set the last removed file.
+     * @param fileName is the name of the file that is removed.
+     */
+    public void setLastRemovedFile(String fileName) {
+        this.lastRemovedFile = fileName;
     }
 }

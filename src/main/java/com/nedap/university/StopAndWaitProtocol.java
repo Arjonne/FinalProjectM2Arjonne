@@ -6,7 +6,7 @@ import java.net.DatagramSocket;
 import java.net.InetAddress;
 
 /**
- * Represents the protocol for sending and receiving packets according to the Stop and Wait ARQ protocol..
+ * Represents the protocol for sending and receiving packets according to the Stop and Wait ARQ protocol.
  */
 public class StopAndWaitProtocol {
     public static byte[] completeFileInBytes;
@@ -24,15 +24,20 @@ public class StopAndWaitProtocol {
      * @param port              is the port to which the packet(s) need to be sent.
      */
     public static void sendFile(byte[] fileInBytes, int lastReceivedSeqNr, int lastReceivedAckNr, DatagramSocket socket, InetAddress address, int port) {
-        System.out.println("Sending file with size " + fileInBytes.length);
+        // start with creating variables that are updated during the file transmission:
         boolean finished = false;
-        int totalNumberOfPackets = (fileInBytes.length / (PacketProtocol.MAX_PACKET_SIZE - PacketProtocol.HEADER_SIZE));
-        int currentPacketNumber = 0; // start with 0 as totalNumberOfPackets is also rounded down.
+        int totalNumberOfPackets = (fileInBytes.length / (PacketProtocol.MAX_PACKET_SIZE - PacketProtocol.HEADER_SIZE)+1); // add 1 as currentPacketNumber also starts at 1.
+        int currentPacketNumber = 1;
         int filePointerSender = 0;
         int sequenceNumber = lastReceivedAckNr + 1;
         int acknowledgementNumber = lastReceivedSeqNr;
         int flag;
+        // set variables in the StatisticsProtocol file in order to measure some statistics on file transmission:
+        StatisticsProtocol.setOptimalNumberOfPackets(totalNumberOfPackets+1); // add one as the total number of packets is rounded down, and division by 0 is not possible so packet count should also start at 1.
+        StatisticsProtocol.startTimer();
+        StatisticsProtocol.resetPacketCount();
         while (!finished) {
+            StatisticsProtocol.addPacket();
             // as long as the last packet of the file is not sent, the flag MOREFRAGMENTS will be sent as a sign for the
             // receiver that more fragments will follow. Otherwise, the flag LAST will be sent.
             if (currentPacketNumber != totalNumberOfPackets) {
@@ -47,20 +52,23 @@ public class StopAndWaitProtocol {
             System.arraycopy(fileInBytes, filePointerSender, dataToSend, 0, dataLenghtInPacket);
             byte[] dataWithHeader = PacketProtocol.createPacketWithHeader(fileInBytes.length, sequenceNumber, acknowledgementNumber, flag, dataToSend);
             DatagramPacket packetToSend = new DatagramPacket(dataWithHeader, dataWithHeader.length, address, port);
-            DatagramPacket ackToReceive = Acknowledgement.createAckPacketToReceive();
+            DatagramPacket ackToReceive = AcknowledgementProtocol.createAckPacketToReceive();
             // try to send the packet and receive an acknowledgement before the timer expires. If acknowledgement is not
             // received in time, the packet will be sent again.
-            Acknowledgement.sendPacketAndReceiveAck(socket, ackToReceive, packetToSend);
+            AcknowledgementProtocol.sendPacketAndReceiveAck(socket, ackToReceive, packetToSend);
             byte[] acknowledgement = ackToReceive.getData();
-            System.out.println("ACK received with flag " + PacketProtocol.getFlag(acknowledgement) + ", ack nr " + PacketProtocol.getAcknowledgementNumber(acknowledgement) + " and seq nr " + PacketProtocol.getSequenceNumber(acknowledgement) + ".");
             // if you did receive an acknowledgement and did not receive the same acknowledgement twice, change
             // variables to be able to send a new packet with the next file data.
             if ((PacketProtocol.getFlag(acknowledgement) == PacketProtocol.ACK) && PacketProtocol.getAcknowledgementNumber(acknowledgement) != lastReceivedAckNr) {
+                System.out.println("Sending progression: " + StatisticsProtocol.calculateProgress(currentPacketNumber, totalNumberOfPackets) + "% complete.");
                 int lastReceivedSequenceNumber = PacketProtocol.getSequenceNumber(acknowledgement);
                 setLastReceivedSeqNr(lastReceivedSequenceNumber);
                 lastReceivedAckNr = PacketProtocol.getAcknowledgementNumber(acknowledgement);
                 setLastReceivedAckNr(lastReceivedAckNr);
                 if (flag == PacketProtocol.LAST) {
+                    StatisticsProtocol.stopTimer();
+                    System.out.println("Sending progression: 100% complete.");
+                    System.out.println(StatisticsProtocol.statisticsInMessage());
                     finished = true;
                 } else {
                     filePointerSender = filePointerSender + dataLenghtInPacket;
@@ -83,7 +91,7 @@ public class StopAndWaitProtocol {
      * @param totalFileSize is the total size of the file that needs to be received.
      */
     public static void receiveFile(DatagramSocket socket, int totalFileSize) {
-        System.out.println("receiving file with size " + totalFileSize);
+        // start with creating variables that are updated during the file transmission:
         byte[] dataCompleteFile = new byte[totalFileSize];
         int lastSequenceNumberReceived = 0;
         int filePointerReceiver = 0;
@@ -109,13 +117,13 @@ public class StopAndWaitProtocol {
                 int port = fileDataPacket.getPort();
                 int receivedSequenceNumber = PacketProtocol.getSequenceNumber(dataOfReceivedPacket);
                 int receivedAckNumber = PacketProtocol.getAcknowledgementNumber(dataOfReceivedPacket);
-                System.out.println("Packet received with flag " + PacketProtocol.getFlag(dataOfReceivedPacket) + " ackNr " + receivedAckNumber + " and seq nr: " + receivedSequenceNumber + ".");
                 // only send an acknowledgement if the checksum is correct:
-                if (DataIntegrityCheck.isChecksumCorrect(dataOfReceivedPacket, (fragmentSize - PacketProtocol.HEADER_SIZE))) {
-                    Acknowledgement.sendAcknowledgement(0, receivedSequenceNumber, receivedAckNumber, socket, inetAddress, port);
+                if (DataIntegrityProtocol.isChecksumCorrect(dataOfReceivedPacket, (fragmentSize - PacketProtocol.HEADER_SIZE))) {
+                    AcknowledgementProtocol.sendAcknowledgement(0, receivedSequenceNumber, receivedAckNumber, socket, inetAddress, port);
                     // check if you did not receive the same packet twice:
                     int sequenceNumber = receivedAckNumber + 1;
                     if (lastSequenceNumberReceived != sequenceNumber) {
+                        System.out.println("Receiving progression: " + StatisticsProtocol.calculateProgress(filePointerReceiver, dataCompleteFile.length) + "% complete.");
                         // if new packet has arrived, add the new data in the byte array that stores all received data
                         // up until this point:
                         int dataLengthInPacket = (dataOfReceivedPacket.length - PacketProtocol.HEADER_SIZE);
@@ -124,6 +132,7 @@ public class StopAndWaitProtocol {
                         lastSequenceNumberReceived = sequenceNumber;
                     }
                     if (receivedFlag == PacketProtocol.LAST) {
+                        System.out.println("Receiving progression: 100% complete.");
                         // store the byte representation of the received file in order to be able to do hash code check if necessary.
                         setFileInBytes(dataCompleteFile);
                         // create file from dataOfReceivedPacket that is received:
@@ -131,7 +140,7 @@ public class StopAndWaitProtocol {
                     }
                 }
             } catch (IOException e) {
-                System.out.println("SW -- Check the destination address input (server address), as the destination could not be found.");
+                System.out.println("Timer has expired, packet will be retransmitted."); // as timer is reset to infinite after receiving ack, this should never appear.
             }
         }
     }

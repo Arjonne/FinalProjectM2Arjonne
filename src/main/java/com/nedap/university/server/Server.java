@@ -87,15 +87,15 @@ public class Server {
             // if the file not exists on the server yet, it can be uploaded. Create a message that can be sent in the
             // acknowledgement and send this acknowledgement to the server:
             String responseMessage = ("Server successfully received the request for uploading " + fileName);
-            Acknowledgement.sendInitialAcknowledgementWithMessage(0, 0, lastReceivedSeqNr, responseMessage, serverSocket, inetAddress, port);
+            AcknowledgementProtocol.sendInitialAcknowledgementWithMessage(0, 0, lastReceivedSeqNr, responseMessage, serverSocket, inetAddress, port);
             // receive the file that the client wants to upload:
             StopAndWaitProtocol.receiveFile(serverSocket, totalFileSize);
             File uploadedFile = FileProtocol.bytesToFile(FileProtocol.SERVER_FILEPATH, fileName, StopAndWaitProtocol.getFileInBytes());
             // perform check on integrity.
-            DataIntegrityCheck.receiveAndPerformTotalChecksum(serverSocket, inetAddress, port, uploadedFile);
+            DataIntegrityProtocol.receiveAndPerformTotalChecksum(serverSocket, inetAddress, port, uploadedFile);
         } else {
             String responseMessage = (fileName + " is already stored on the server. You can therefore not upload this file.");
-            Acknowledgement.sendInitialAcknowledgementWithMessage(PacketProtocol.DOESALREADYEXIST, 0, lastReceivedSeqNr, responseMessage, serverSocket, inetAddress, port);
+            AcknowledgementProtocol.sendInitialAcknowledgementWithMessage(PacketProtocol.DOESALREADYEXIST, 0, lastReceivedSeqNr, responseMessage, serverSocket, inetAddress, port);
         }
     }
 
@@ -111,7 +111,7 @@ public class Server {
     public void sendFile(String fileName, int lastReceivedSeqNr, InetAddress inetAddress, int port, DatagramSocket serverSocket) {
         if (!FileProtocol.doesFileExist(fileName, filePath)) {
             String responseMessage = (fileName + " does not exist on the server and can therefore not be downloaded.");
-            Acknowledgement.sendInitialAcknowledgementWithMessage(PacketProtocol.DOESNOTEXIST, 0, lastReceivedSeqNr, responseMessage, serverSocket, inetAddress, port);
+            AcknowledgementProtocol.sendInitialAcknowledgementWithMessage(PacketProtocol.DOESNOTEXIST, 0, lastReceivedSeqNr, responseMessage, serverSocket, inetAddress, port);
         } else {
             // get the size of the file to send and create a response message. Try to send an acknowledgement to the
             // client with this information in it, and try to receive an acknowledgement as sign that the server can
@@ -119,9 +119,9 @@ public class Server {
             // (with fileSize and message) will be sent again.
             int fileSize = FileProtocol.getFileSize(FileProtocol.SERVER_FILEPATH, fileName);
             String responseMessage = ("Server successfully received the request for downloading " + fileName);
-            Acknowledgement.sendAckWithFileSizeAndReceiveAck(0, fileSize, lastReceivedSeqNr, responseMessage, inetAddress, port, serverSocket);
-            byte[] ackReceived = Acknowledgement.getLastReceivedAcknowledgement();
-            if (PacketProtocol.getFlag(ackReceived) == PacketProtocol.ACK) {
+            AcknowledgementProtocol.sendAckWithFileSizeAndReceiveAck(0, fileSize, lastReceivedSeqNr, responseMessage, inetAddress, port, serverSocket);
+            byte[] ackReceived = AcknowledgementProtocol.getLastReceivedAcknowledgement();
+            if (PacketProtocol.getFlag(ackReceived) == PacketProtocol.ACK || PacketProtocol.getFlag(ackReceived) == PacketProtocol.DOWNLOAD) {
                 // first, get some information from the acknowledgement that is received:
                 lastReceivedSeqNr = PacketProtocol.getSequenceNumber(ackReceived);
                 int lastReceivedAckNr = PacketProtocol.getAcknowledgementNumber(ackReceived);
@@ -131,12 +131,12 @@ public class Server {
                 if (fileToSendInBytes != null) {
                     StopAndWaitProtocol.sendFile(fileToSendInBytes, lastReceivedSeqNr, lastReceivedAckNr, serverSocket, inetAddress, port);
                     // calculate the checksum of the original file and send it to the server:
-                    int checksumOfTotalFile = DataIntegrityCheck.calculateChecksum(fileToSendInBytes);
+                    int checksumOfTotalFile = DataIntegrityProtocol.calculateChecksum(fileToSendInBytes);
                     lastReceivedSeqNr = StopAndWaitProtocol.getLastReceivedSeqNr();
                     lastReceivedAckNr = StopAndWaitProtocol.getLastReceivedAckNr();
                     // create packet with checksum of total file in it, send it to the server and try to receive an ACK:
-                    DatagramPacket checksumToSend = DataIntegrityCheck.createChecksumPacket(checksumOfTotalFile, lastReceivedSeqNr, lastReceivedAckNr, inetAddress, port);
-                    if (Acknowledgement.sendChecksumAndReceiveAck(serverSocket, checksumToSend)) {
+                    DatagramPacket checksumToSend = DataIntegrityProtocol.createChecksumPacket(checksumOfTotalFile, lastReceivedSeqNr, lastReceivedAckNr, inetAddress, port);
+                    if (AcknowledgementProtocol.sendChecksumAndReceiveAck(serverSocket, checksumToSend)) {
                         System.out.println(fileName + " is successfully downloaded by the client.");
                     } else {
                         System.out.println("The download of " + fileName + " was not successful.");
@@ -159,10 +159,10 @@ public class Server {
             serverSocket) {
         if (isFileRemoved(fileName, filePath)) {
             String responseMessage = ("Server successfully received the request for removing " + fileName + ". File is removed.");
-            Acknowledgement.sendInitialAcknowledgementWithMessage(0, 0, lastReceivedSeqNr, responseMessage, serverSocket, inetAddress, port);
+            AcknowledgementProtocol.sendInitialAcknowledgementWithMessage(0, 0, lastReceivedSeqNr, responseMessage, serverSocket, inetAddress, port);
         } else {
             String responseMessage = (fileName + " cannot be removed by the server as it does not exist.");
-            Acknowledgement.sendInitialAcknowledgementWithMessage(PacketProtocol.DOESNOTEXIST, 0, lastReceivedSeqNr, responseMessage, serverSocket, inetAddress, port);
+            AcknowledgementProtocol.sendInitialAcknowledgementWithMessage(PacketProtocol.DOESNOTEXIST, 0, lastReceivedSeqNr, responseMessage, serverSocket, inetAddress, port);
         }
     }
 
@@ -183,13 +183,13 @@ public class Server {
         // if the old file exists on the server, first try to remove it. Then, try to receive the new file from the client.
         if (isFileRemoved(oldFileName, filePath)) {
             String responseMessage = ("Server successfully received the request for replacing " + oldFileName + " by " + newFileName + ".");
-            Acknowledgement.sendInitialAcknowledgementWithMessage(0, 0, lastReceivedSeqNr, responseMessage, serverSocket, inetAddress, port);
+            AcknowledgementProtocol.sendInitialAcknowledgementWithMessage(0, 0, lastReceivedSeqNr, responseMessage, serverSocket, inetAddress, port);
             StopAndWaitProtocol.receiveFile(serverSocket, totalFileSize);
             File replacingFile = FileProtocol.bytesToFile(FileProtocol.SERVER_FILEPATH, newFileName, StopAndWaitProtocol.getFileInBytes());
-            DataIntegrityCheck.receiveAndPerformTotalChecksum(serverSocket, inetAddress, port, replacingFile);
+            DataIntegrityProtocol.receiveAndPerformTotalChecksum(serverSocket, inetAddress, port, replacingFile);
         } else {
             String responseMessage = (oldFileName + " cannot be replaced by the server as it does not exist.");
-            Acknowledgement.sendInitialAcknowledgementWithMessage(PacketProtocol.DOESNOTEXIST, 0, lastReceivedSeqNr, responseMessage, serverSocket, inetAddress, port);
+            AcknowledgementProtocol.sendInitialAcknowledgementWithMessage(PacketProtocol.DOESNOTEXIST, 0, lastReceivedSeqNr, responseMessage, serverSocket, inetAddress, port);
         }
     }
 
@@ -205,7 +205,7 @@ public class Server {
     public void listFiles(int lastReceivedSeqNr, InetAddress inetAddress, int port, DatagramSocket serverSocket) {
         if (!FileProtocol.areFilesStoredOnServer(filePath)) {
             String responseMessage = ("There are no files stored on the server yet.");
-            Acknowledgement.sendInitialAcknowledgementWithMessage(PacketProtocol.DOESNOTEXIST, 0, lastReceivedSeqNr, responseMessage, serverSocket, inetAddress, port);
+            AcknowledgementProtocol.sendInitialAcknowledgementWithMessage(PacketProtocol.DOESNOTEXIST, 0, lastReceivedSeqNr, responseMessage, serverSocket, inetAddress, port);
         } else {
             // get the size of the list to send and create a response message. Try to send an acknowledgement to the
             // client with this information in it, and try to receive an acknowledgement as sign that the server can
@@ -215,9 +215,9 @@ public class Server {
             byte[] listOfFilesInBytes = listOfFileNames.getBytes();
             int fileSize = listOfFilesInBytes.length;
             String responseMessage = ("Server successfully received the request for listing all files.");
-            Acknowledgement.sendAckWithFileSizeAndReceiveAck(0, fileSize, lastReceivedSeqNr, responseMessage, inetAddress, port, serverSocket);
+            AcknowledgementProtocol.sendAckWithFileSizeAndReceiveAck(0, fileSize, lastReceivedSeqNr, responseMessage, inetAddress, port, serverSocket);
             // get information from the received acknowledgement and send the list of stored files:
-            byte[] ackReceived = Acknowledgement.getLastReceivedAcknowledgement();
+            byte[] ackReceived = AcknowledgementProtocol.getLastReceivedAcknowledgement();
             int lastReceivedAckNr = PacketProtocol.getAcknowledgementNumber(ackReceived);
             lastReceivedSeqNr = PacketProtocol.getSequenceNumber(ackReceived);
             StopAndWaitProtocol.sendFile(listOfFilesInBytes, lastReceivedSeqNr, lastReceivedAckNr, serverSocket, inetAddress, port);
@@ -235,7 +235,7 @@ public class Server {
     public void respondToClosingClient(int lastReceivedSeqNr, InetAddress inetAddress, int port, DatagramSocket
             serverSocket) {
         String responseMessage = ("Server successfully received that you are closing the application.");
-        Acknowledgement.sendInitialAcknowledgementWithMessage(0, 0, lastReceivedSeqNr, responseMessage, serverSocket, inetAddress, port);
+        AcknowledgementProtocol.sendInitialAcknowledgementWithMessage(0, 0, lastReceivedSeqNr, responseMessage, serverSocket, inetAddress, port);
     }
 
     /**
