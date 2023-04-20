@@ -9,8 +9,7 @@ import java.io.*;
 public final class FileProtocol {
     // filePath for sending files using localHost:
     public static final String CLIENT_FILEPATH = "/Users/arjonne.laar/Documents/module2/FinalProjectM2Arjonne/example_files/";
-    public static final String SERVER_FILEPATH = "/Users/arjonne.laar/Documents/module2/FinalProjectM2Arjonne/localserver/";
-//    public static final String SERVER_FILEPATH = "/home/pi/Files/";
+    public static final String SERVER_FILEPATH = "/home/pi/Files/";
 
     /**
      * Get the actual file.
@@ -116,17 +115,12 @@ public final class FileProtocol {
      */
     public static String createListOfFileNames(File filePath) {
         File[] listOfFiles = filePath.listFiles();
-        if (areFilesStoredOnServer(filePath)) {
         String listedFiles = "\nThe following files are stored on the server: \n";
-            for (File file : listOfFiles) {
-                String fileName = file.getName();
-                listedFiles = listedFiles + fileName + "\n";
-            }
-            return listedFiles;
-        } else {
-            String listedFiles = "\nNo files to show: there are stored on the server yet. \n";
-            return listedFiles;
+        for (File file : listOfFiles) {
+            String fileName = file.getName();
+            listedFiles = listedFiles + fileName + "\n";
         }
+        return listedFiles;
     }
 
     /**
@@ -139,13 +133,13 @@ public final class FileProtocol {
     public static boolean doesFileExist(String fileNameToCheck, File filePath) {
         File[] listOfFiles = filePath.listFiles();
         if (areFilesStoredOnServer(filePath)) {
-                for (File file : listOfFiles) {
-                    String fileName = file.getName();
-                    if (fileName.equals(fileNameToCheck)) {
-                        return true;
-                    }
+            for (File file : listOfFiles) {
+                String fileName = file.getName();
+                if (fileName.equals(fileNameToCheck)) {
+                    return true;
                 }
             }
+        }
         return false;
     }
 }

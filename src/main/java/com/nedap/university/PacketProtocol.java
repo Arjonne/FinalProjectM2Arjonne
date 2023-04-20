@@ -7,15 +7,14 @@ import java.util.Random;
  */
 public final class PacketProtocol {
 //          --- ADDRESS AND PORT INFORMATION ---
-    public static final String PI_ADDRESS = "localhost";
-//    public static final String PI_ADDRESS = "172.16.1.1";
+    public static final String PI_ADDRESS = "172.16.1.1";
     public static final int PI_PORT = 9090;
 
 //          --- SIZES ---
     public static final int MAX_PACKET_SIZE = 1500; // which is the MTU.
     public static final int PACKET_WITH_MESSAGE_SIZE = 256; // which is big enough to receive the messages that are being sent.
     public static final int HEADER_SIZE = 16;
-    public static final int RTT = 3; // which is the mean RTT as calculated over a stable network.
+    public static final int RTT = 3000; // which is the mean RTT as calculated over a stable network.
     public static final int TIMEOUT = 2*RTT; // which is the default time-out time.
 
 //          --- FLAGS ---

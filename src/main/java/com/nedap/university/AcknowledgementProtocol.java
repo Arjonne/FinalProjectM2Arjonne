@@ -162,8 +162,6 @@ public final class AcknowledgementProtocol {
                 byte[] acknowledgement = ackPacket.getData();
                 setLastReceivedAcknowledgement(acknowledgement);
                 isAckReceived = true;
-                // stop timeOut after correctly receiving the ACK:
-                socket.setSoTimeout(0);
             } catch (IOException e) {
                 // if acknowledgement is not received in time, the value of time-out will be doubled here:
                 timeOutTime = timeOutTime*2;

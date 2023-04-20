@@ -28,8 +28,6 @@ public class RemoveFileTest {
         server = new Server();
     }
 
-    //todo voor inleveren: plaats medium.pdf in deze folder!
-
     /**
      * Test whether the file that did exist before the removal action, actually is removed afterwards.
      */
