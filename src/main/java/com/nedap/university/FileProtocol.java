@@ -10,6 +10,7 @@ public final class FileProtocol {
     // filePath for sending files using localHost:
     public static final String CLIENT_FILEPATH = "/Users/arjonne.laar/Documents/module2/FinalProjectM2Arjonne/example_files/";
     public static final String SERVER_FILEPATH = "/home/pi/Files/";
+//    public static final String SERVER_FILEPATH = "/Users/arjonne.laar/Documents/module2/FinalProjectM2Arjonne/localserver/";
 
     /**
      * Get the actual file.

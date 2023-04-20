@@ -16,7 +16,7 @@ public class StatisticsProtocol {
      *              to be received in case of receiving).
      * @return the percentage that is being transmitted.
      */
-    public static int calculateProgress(int part, int total) {
+    public static long calculateProgress(long part, long total) {
         return ((part * 100) / total);
     }
 

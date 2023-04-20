@@ -121,7 +121,20 @@ public class Server {
             String responseMessage = ("Server successfully received the request for downloading " + fileName);
             AcknowledgementProtocol.sendAckWithFileSizeAndReceiveAck(0, fileSize, lastReceivedSeqNr, responseMessage, inetAddress, port, serverSocket);
             byte[] ackReceived = AcknowledgementProtocol.getLastReceivedAcknowledgement();
-            if (PacketProtocol.getFlag(ackReceived) == PacketProtocol.ACK || PacketProtocol.getFlag(ackReceived) == PacketProtocol.DOWNLOAD) {
+            while (PacketProtocol.getFlag(ackReceived) != PacketProtocol.ACK) {
+                try {
+                    System.out.println("sleep in server");
+                    Thread.sleep(1000);
+                    DatagramPacket newAck = AcknowledgementProtocol.createAckPacketToReceive();
+                    serverSocket.receive(newAck);
+                    ackReceived = newAck.getData();
+                } catch (InterruptedException e) {
+                    System.out.println("could not sleep");
+                } catch (IOException e) {
+                    System.out.println("could not receive new ack");;
+                }
+            }
+            if (PacketProtocol.getFlag(ackReceived) == PacketProtocol.ACK) {
                 // first, get some information from the acknowledgement that is received:
                 lastReceivedSeqNr = PacketProtocol.getSequenceNumber(ackReceived);
                 int lastReceivedAckNr = PacketProtocol.getAcknowledgementNumber(ackReceived);
@@ -218,9 +231,25 @@ public class Server {
             AcknowledgementProtocol.sendAckWithFileSizeAndReceiveAck(0, fileSize, lastReceivedSeqNr, responseMessage, inetAddress, port, serverSocket);
             // get information from the received acknowledgement and send the list of stored files:
             byte[] ackReceived = AcknowledgementProtocol.getLastReceivedAcknowledgement();
-            int lastReceivedAckNr = PacketProtocol.getAcknowledgementNumber(ackReceived);
-            lastReceivedSeqNr = PacketProtocol.getSequenceNumber(ackReceived);
-            StopAndWaitProtocol.sendFile(listOfFilesInBytes, lastReceivedSeqNr, lastReceivedAckNr, serverSocket, inetAddress, port);
+            while (PacketProtocol.getFlag(ackReceived) != PacketProtocol.ACK) {
+                try {
+                    System.out.println("sleep in server");
+                    Thread.sleep(1000);
+                    DatagramPacket newAck = AcknowledgementProtocol.createAckPacketToReceive();
+                    serverSocket.receive(newAck);
+                    ackReceived = newAck.getData();
+                } catch (InterruptedException e) {
+                    System.out.println("could not sleep");
+                } catch (IOException e) {
+                    System.out.println("could not receive new ack");
+                    ;
+                }
+            }
+            if (PacketProtocol.getFlag(ackReceived) == PacketProtocol.ACK) {
+                int lastReceivedAckNr = PacketProtocol.getAcknowledgementNumber(ackReceived);
+                lastReceivedSeqNr = PacketProtocol.getSequenceNumber(ackReceived);
+                StopAndWaitProtocol.sendFile(listOfFilesInBytes, lastReceivedSeqNr, lastReceivedAckNr, serverSocket, inetAddress, port);
+            }
         }
     }
 

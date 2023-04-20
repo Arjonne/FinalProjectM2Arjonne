@@ -60,7 +60,9 @@ public class StopAndWaitProtocol {
             // if you did receive an acknowledgement and did not receive the same acknowledgement twice, change
             // variables to be able to send a new packet with the next file data.
             if ((PacketProtocol.getFlag(acknowledgement) == PacketProtocol.ACK) && PacketProtocol.getAcknowledgementNumber(acknowledgement) != lastReceivedAckNr) {
-                System.out.println("Sending progression: " + StatisticsProtocol.calculateProgress(currentPacketNumber, totalNumberOfPackets) + "% complete.");
+                System.out.println("Sending progression: " + currentPacketNumber + "/" + totalNumberOfPackets + "% complete.");
+
+             //   System.out.println("Sending progression: " + StatisticsProtocol.calculateProgress(currentPacketNumber, totalNumberOfPackets) + "% complete.");
                 int lastReceivedSequenceNumber = PacketProtocol.getSequenceNumber(acknowledgement);
                 setLastReceivedSeqNr(lastReceivedSequenceNumber);
                 lastReceivedAckNr = PacketProtocol.getAcknowledgementNumber(acknowledgement);
@@ -123,7 +125,9 @@ public class StopAndWaitProtocol {
                     // check if you did not receive the same packet twice:
                     int sequenceNumber = receivedAckNumber + 1;
                     if (lastSequenceNumberReceived != sequenceNumber) {
-                        System.out.println("Receiving progression: " + StatisticsProtocol.calculateProgress(filePointerReceiver, dataCompleteFile.length) + "% complete.");
+                        System.out.println("Receiving progression: " + filePointerReceiver + "/" + dataCompleteFile.length + "% complete.");
+
+                     //   System.out.println("Receiving progression: " + StatisticsProtocol.calculateProgress(filePointerReceiver, dataCompleteFile.length) + "% complete.");
                         // if new packet has arrived, add the new data in the byte array that stores all received data
                         // up until this point:
                         int dataLengthInPacket = (dataOfReceivedPacket.length - PacketProtocol.HEADER_SIZE);
