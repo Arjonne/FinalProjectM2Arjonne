@@ -7,14 +7,16 @@ import java.util.Random;
  */
 public final class PacketProtocol {
 //          --- ADDRESS AND PORT INFORMATION ---
-//    public static final String PI_ADDRESS = "localhost";
-    public static final String PI_ADDRESS = "172.16.1.1";
+    public static final String PI_ADDRESS = "localhost";
+//    public static final String PI_ADDRESS = "172.16.1.1";
     public static final int PI_PORT = 9090;
 
 //          --- SIZES ---
-    public static final int MAX_PACKET_SIZE = 1500;
-    public static final int PACKET_WITH_MESSAGE_SIZE = 256;
+    public static final int MAX_PACKET_SIZE = 1500; // which is the MTU.
+    public static final int PACKET_WITH_MESSAGE_SIZE = 256; // which is big enough to receive the messages that are being sent.
     public static final int HEADER_SIZE = 16;
+    public static final int RTT = 3; // which is the mean RTT as calculated over a stable network.
+    public static final int TIMEOUT = 2*RTT; // which is the default time-out time.
 
 //          --- FLAGS ---
     public static final int ACK = 1;
@@ -30,7 +32,6 @@ public final class PacketProtocol {
     public static final int LAST = 1024;
     public static final int CHECK = 2048;
     public static final int INCORRECT = 4096;
-    public static final int RTT = 3000; // todo check wat RTT is in milliseconds
 
     /**
      * Create a header for the datagram packet to be able to use sequence numbers and acknowledgements for checking
@@ -64,10 +65,10 @@ public final class PacketProtocol {
         header[12] = (byte) (flag >> 8); // room for 3 more flags if necessary
         header[13] = (byte) (flag & 0xff);
         // create a new byte array with all information that is needed for the checksum:
-        byte[] checksumInput = DataIntegrityCheck.getChecksumInput(header, payloadLength);
+        byte[] checksumInput = DataIntegrityProtocol.getChecksumInput(header, payloadLength);
         // two bytes for checksum:
-        header[14] = (byte) (DataIntegrityCheck.calculateChecksum(checksumInput) >> 8);
-        header[15] = (byte) (DataIntegrityCheck.calculateChecksum(checksumInput) & 0xff);
+        header[14] = (byte) (DataIntegrityProtocol.calculateChecksum(checksumInput) >> 8);
+        header[15] = (byte) (DataIntegrityProtocol.calculateChecksum(checksumInput) & 0xff);
         return header;
     }
 

@@ -23,8 +23,8 @@ public class PacketChecksumTest {
         int headerSize = 16;
         int sum = totalFileSize + sequenceNumber + acknowledgementNumber + flag + payloadLength + headerSize;
         byte[] packetHeader = PacketProtocol.createHeader(totalFileSize, sequenceNumber, acknowledgementNumber, flag, payloadLength);
-        byte[] checksumInput = DataIntegrityCheck.getChecksumInput(packetHeader, payloadLength);
-        int inverseResultOfChecksum = DataIntegrityCheck.calculateChecksum(checksumInput);
+        byte[] checksumInput = DataIntegrityProtocol.getChecksumInput(packetHeader, payloadLength);
+        int inverseResultOfChecksum = DataIntegrityProtocol.calculateChecksum(checksumInput);
         assertEquals((~sum & 0xffff), inverseResultOfChecksum);
     }
 
@@ -41,8 +41,8 @@ public class PacketChecksumTest {
         int payloadLength = 32768; // = 2^15;
         int sum = 20; // which was the result of performing the calculation on paper.
         byte[] packetHeader = PacketProtocol.createHeader(totalFileSize, sequenceNumber, acknowledgementNumber, flag, payloadLength);
-        byte[] checksumInput = DataIntegrityCheck.getChecksumInput(packetHeader, payloadLength);
-        int inverseResultOfChecksum = DataIntegrityCheck.calculateChecksum(checksumInput);
+        byte[] checksumInput = DataIntegrityProtocol.getChecksumInput(packetHeader, payloadLength);
+        int inverseResultOfChecksum = DataIntegrityProtocol.calculateChecksum(checksumInput);
         assertEquals((~sum & 0xffff), inverseResultOfChecksum);
     }
 
@@ -60,7 +60,7 @@ public class PacketChecksumTest {
         byte[] packetHeader = PacketProtocol.createHeader(totalFileSize, sequenceNumber, acknowledgementNumber, flag, payloadLength);
         int inverseResultOfChecksum = PacketProtocol.getChecksum(packetHeader);
         assertEquals(inverseResultOfChecksum, PacketProtocol.getChecksum(packetHeader));
-        assertTrue(DataIntegrityCheck.isChecksumCorrect(packetHeader, payloadLength));
+        assertTrue(DataIntegrityProtocol.isChecksumCorrect(packetHeader, payloadLength));
     }
 
     /**
@@ -76,6 +76,6 @@ public class PacketChecksumTest {
         int flag = 4096;
         int payloadLength = 32768; //2^15
         byte[] packetHeader = PacketProtocol.createHeader(totalFileSize, sequenceNumber, acknowledgementNumber, flag, payloadLength);
-        assertTrue(DataIntegrityCheck.isChecksumCorrect(packetHeader, payloadLength));
+        assertTrue(DataIntegrityProtocol.isChecksumCorrect(packetHeader, payloadLength));
     }
 }

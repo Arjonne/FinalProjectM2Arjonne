@@ -94,8 +94,8 @@ public class DataIntegrityTest {
     public void testChecksumTotalFile() {
         byte[] pdfInExampleFolderInBytes = FileProtocol.fileToBytes(filePath_example_files, pdf);
         byte[] pdfInBackupFolderInBytes = FileProtocol.fileToBytes(filePath_example_files_backup, pdf);
-        int checksumPdfInExampleFolder = DataIntegrityCheck.calculateChecksum(pdfInExampleFolderInBytes);
-        int checksumPdfInBackupFolder = DataIntegrityCheck.calculateChecksum(pdfInBackupFolderInBytes);
-        assertTrue(DataIntegrityCheck.areChecksumOfTwoFilesTheSame(checksumPdfInExampleFolder, checksumPdfInBackupFolder));
+        int checksumPdfInExampleFolder = DataIntegrityProtocol.calculateChecksum(pdfInExampleFolderInBytes);
+        int checksumPdfInBackupFolder = DataIntegrityProtocol.calculateChecksum(pdfInBackupFolderInBytes);
+        assertTrue(DataIntegrityProtocol.areChecksumOfTwoFilesTheSame(checksumPdfInExampleFolder, checksumPdfInBackupFolder));
     }
 }
